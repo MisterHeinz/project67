@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регулируемая линия</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px 60px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 900px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+
+        /* Основная зона: 3 колонки — левые кнопки, линия, правые кнопки */
+        .main {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 30px;
+            min-height: 300px;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn {
+            width: 70px;
+            height: 70px;
+            font-size: 32px;
+            font-weight: bold;
+            border: 2px solid #333;
+            background: white;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: #f0f0f0;
+            transform: scale(1.05);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-plus {
+            color: #28a745;
+        }
+
+        .btn-minus {
+            color: #dc3545;
+        }
+
+        .display {
+            margin-top: 8px;
+            padding: 8px 14px;
+            border: 2px solid #333;
+            border-radius: 6px;
+            background: #fffbe6;
+            font-size: 15px;
+            font-weight: 600;
+            min-width: 70px;
+            text-align: center;
+            color: #333;
+        }
+
+        /* Область линии */
+        .line-area {
+            position: relative;
+            height: 300px;
+            /* Линия должна двигаться от 0 (внизу) до 5 см вверх с каждой стороны.
+               1 см = 30 px для наглядности. Максимум смещение = 150 px. */
+        }
+
+        .line-svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+
+        .line {
+            stroke: #2c3e50;
+            stroke-width: 6;
+            stroke-linecap: round;
+            transition: none;
+            /* мгновенная реакция при нажатии */;
+        }
+
+        .endpoint {
+            fill: #e74c3c;
+            stroke: #c0392b;
+            stroke-width: 2;
+        }
+
+        .info {
+            margin-top: 25px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .info strong {
+            color: #333;
+        }
+
+        /* статус соединения */
+        .status-bar {
+            margin-top: 12px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            background: #e9ecef;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #6c757d;
+            flex-shrink: 0;
+        }
+        .status-dot.ok {
+            background: #28a745;
+        }
+        .status-dot.err {
+            background: #dc3545;
+        }
+        .status-dot.wait {
+            background: #ffc107;
+        }
+        .status-label {
+            font-weight: 600;
+        }
+        .status-msg {
+            color: #868e96;
+        }
+        .calib-btn {
+            margin-left: auto;
+            padding: 4px 16px;
+            border: 1px solid #667eea;
+            border-radius: 4px;
+            background: white;
+            color: #667eea;
+            cursor: pointer;
+            font-size: 13px;
+            transition: 0.15s;
+        }
+        .calib-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Регулируемая линия — поднимите края кнопками</h1>
+
+        <div class="main">
+            <!-- Левые кнопки (ось X) -->
+            <div class="controls">
+                <button class="btn btn-plus" id="leftPlus">+</button>
+                <button class="btn btn-minus" id="leftMinus">−</button>
+                <div class="display" id="leftDisplay">0 см</div>
+            </div>
+
+            <!-- Линия (SVG) -->
+            <div class="line-area">
+                <svg class="line-svg" id="svg" viewBox="0 0 600 300" preserveAspectRatio="none">
+                    <!-- Пунктирная базовая линия (изначальное положение) -->
+                    <line x1="20" y1="250" x2="580" y2="250"
+                    stroke="#bbb" stroke-width="1" stroke-dasharray="6 6"/>
+                    <!-- Основная линия -->
+                    <line class="line" id="mainLine"
+                    x1="20" y1="250" x2="580" y2="250"/>
+                    <!-- Точки на концах -->
+                    <circle class="endpoint" id="leftDot" cx="20" cy="250" r="7"/>
+                    <circle class="endpoint" id="rightDot" cx="580" cy="250" r="7"/>
+                </svg>
+            </div>
+
+            <!-- Правые кнопки (ось Y) -->
+            <div class="controls">
+                <button class="btn btn-plus" id="rightPlus">+</button>
+                <button class="btn btn-minus" id="rightMinus">−</button>
+                <div class="display" id="rightDisplay">0 см</div>
+            </div>
+        </div>
+
+        <!-- Статус и кнопка ручной калибровки -->
+        <div class="status-bar">
+            <span class="status-dot wait" id="statusDot"></span>
+            <span class="status-label" id="statusLabel">Соединение...</span>
+            <span class="status-msg" id="statusMsg">ожидание сервера</span>
+            <button class="calib-btn" id="calibrateBtn">⟳ Калибровка</button>
+        </div>
+
+        <div class="info">
+            <strong>Как это работает:</strong> Каждое нажатие на «+» поднимает соответствующий край линии на 1 см
+            (максимум 5 см). Кнопка «−» опускает край обратно (не ниже изначального положения).
+            Текущая высота каждого края отображается под кнопками в реальном времени.
+            <br><strong>Ось X</strong> — левая сторона, <strong>ось Y</strong> — правая сторона.
+            При запуске выполняется автоматическая калибровка.
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        //  КОНФИГУРАЦИЯ
+        // ============================================================
+        const MAX_CM = 5; // максимум 5 см вверх
+        const MIN_CM = 0; // минимум — изначальное положение
+        const PX_PER_CM = 30; // 1 см = 30 пикселей (визуально)
+        const BASE_Y = 250; // Y-координата изначального положения линии в SVG
+        const SERVER_URL = window.location.origin;
+
+        // ============================================================
+        //  СОСТОЯНИЕ
+        // ============================================================
+        let leftCm = 0; // ось X
+        let rightCm = 0; // ось Y
+        let isCalibrated = false;
+        let isMoving = false;
+
+        // ============================================================
+        //  DOM-ЭЛЕМЕНТЫ
+        // ============================================================
+        const mainLine = document.getElementById('mainLine');
+        const leftDot = document.getElementById('leftDot');
+        const rightDot = document.getElementById('rightDot');
+        const leftDisplay = document.getElementById('leftDisplay');
+        const rightDisplay = document.getElementById('rightDisplay');
+
+        const leftPlus = document.getElementById('leftPlus');
+        const leftMinus = document.getElementById('leftMinus');
+        const rightPlus = document.getElementById('rightPlus');
+        const rightMinus = document.getElementById('rightMinus');
+
+        const statusDot = document.getElementById('statusDot');
+        const statusLabel = document.getElementById('statusLabel');
+        const statusMsg = document.getElementById('statusMsg');
+        const calibrateBtn = document.getElementById('calibrateBtn');
+
+        // ============================================================
+        //  ОТРИСОВКА SVG (только визуал, без отправки на сервер)
+        // ============================================================
+        function render() {
+            const leftY = BASE_Y - leftCm * PX_PER_CM;
+            const rightY = BASE_Y - rightCm * PX_PER_CM;
+
+            mainLine.setAttribute('y1', leftY);
+            mainLine.setAttribute('y2', rightY);
+            leftDot.setAttribute('cy', leftY);
+            rightDot.setAttribute('cy', rightY);
+
+            leftDisplay.textContent = leftCm + ' см';
+            rightDisplay.textContent = rightCm + ' см';
+
+            // Блокируем кнопки по границам (дополнительная защита)
+            leftPlus.disabled = leftCm >= MAX_CM || isMoving;
+            leftMinus.disabled = leftCm <= MIN_CM || isMoving;
+            rightPlus.disabled = rightCm >= MAX_CM || isMoving;
+            rightMinus.disabled = rightCm <= MIN_CM || isMoving;
+        }
+
+        // ============================================================
+        //  СТАТУС
+        // ============================================================
+        function setStatus(state, msg) {
+            statusDot.className = 'status-dot';
+            if (state === 'ok') {
+                statusDot.classList.add('ok');
+                statusLabel.textContent = 'Готов';
+            } else if (state === 'err') {
+                statusDot.classList.add('err');
+                statusLabel.textContent = 'Ошибка';
+            } else if (state === 'wait') {
+                statusDot.classList.add('wait');
+                statusLabel.textContent = 'Ожидание...';
+            } else {
+                statusDot.classList.add('wait');
+                statusLabel.textContent = 'Соединение...';
+            }
+            if (msg) statusMsg.textContent = msg;
+        }
+
+        // ============================================================
+        //  HTTP-ЗАПРОСЫ К СЕРВЕРУ
+        // ============================================================
+        async function apiRequest(endpoint, method = 'POST', body = null) {
+            const opts = {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+            };
+            if (body) opts.body = JSON.stringify(body);
+            const resp = await fetch(SERVER_URL + endpoint, opts);
+            if (!resp.ok) {
+                const text = await resp.text();
+                throw new Error(`HTTP ${resp.status}: ${text}`);
+            }
+            return await resp.json();
+        }
+
+        // ============================================================
+        //  КАЛИБРОВКА
+        // ============================================================
+        async function doCalibrate() {
+            setStatus('wait', 'Калибровка...');
+            try {
+                const result = await apiRequest('/calibrate', 'POST');
+                if (result.success) {
+                    leftCm = 0;
+                    rightCm = 0;
+                    isCalibrated = true;
+                    render();
+                    setStatus('ok', 'Калибровка выполнена, платформа на нуле');
+                } else {
+                    setStatus('err', result.error || 'Ошибка калибровки');
+                }
+            } catch (e) {
+                setStatus('err', 'Ошибка: ' + e.message);
+            }
+        }
+
+        // ============================================================
+        //  ДВИЖЕНИЕ
+        // ============================================================
+        async function doMove(axis, amountCm) {
+            // amountCm: +1 = вверх, -1 = вниз
+            if (isMoving) return;
+            if (axis === 'x') {
+                const newVal = leftCm + amountCm;
+                if (newVal < MIN_CM || newVal > MAX_CM) return;
+            } else {
+                const newVal = rightCm + amountCm;
+                if (newVal < MIN_CM || newVal > MAX_CM) return;
+            }
+
+            isMoving = true;
+            render();
+
+            try {
+                const result = await apiRequest('/move', 'POST', {
+                    axis: axis,
+                    amount: amountCm // в см, сервер переведёт в мм
+                });
+
+                if (result.success) {
+                    if (axis === 'x') {
+                        leftCm += amountCm;
+                    } else {
+                        rightCm += amountCm;
+                    }
+                    render();
+                    setStatus('ok', 'Движение выполнено');
+                } else {
+                    setStatus('err', result.error || 'Ошибка движения');
+                }
+            } catch (e) {
+                setStatus('err', 'Ошибка: ' + e.message);
+            }
+
+            isMoving = false;
+            render();
+        }
+
+        // ============================================================
+        //  ПРОВЕРКА ЗДОРОВЬЯ СЕРВЕРА
+        // ============================================================
+        async function pingServer() {
+            try {
+                const resp = await fetch(SERVER_URL + '/ping', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.status === 'ok') {
+                        setStatus('ok', 'Сервер доступен');
+                        return true;
+                    }
+                }
+                setStatus('err', 'Сервер недоступен');
+                return false;
+            } catch (e) {
+                setStatus('err', 'Сервер не отвечает: ' + e.message);
+                return false;
+            }
+        }
+
+        // ============================================================
+        //  ИНИЦИАЛИЗАЦИЯ
+        // ============================================================
+        async function init() {
+            // Проверяем сервер
+            const ok = await pingServer();
+            if (ok) {
+                // Автокалибровка
+                await doCalibrate();
+            } else {
+                // Периодически пробуем переподключиться
+                setTimeout(init, 5000);
+            }
+        }
+
+        // ============================================================
+        //  ОБРАБОТЧИКИ КНОПОК
+        // ============================================================
+        leftPlus.addEventListener('click', () => doMove('x', +1));
+        leftMinus.addEventListener('click', () => doMove('x', -1));
+        rightPlus.addEventListener('click', () => doMove('y', +1));
+        rightMinus.addEventListener('click', () => doMove('y', -1));
+
+        calibrateBtn.addEventListener('click', doCalibrate);
+
+        // ============================================================
+        //  СТАРТ
+        // ============================================================
+        render();
+        init();
+
+        console.log('✅ Страница загружена. Сервер: ' + SERVER_URL);
+        console.log('   Левая сторона → ось X, правая сторона → ось Y');
+        console.log('   Команды: RM OX±10.0 / OY±10.0, SP30 AC50 DC50');
+    </script>
+</body>
+</html>
