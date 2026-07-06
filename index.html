@@ -237,6 +237,16 @@
             <span class="status-dot wait" id="statusDot"></span>
             <span class="status-label" id="statusLabel">Соединение...</span>
             <span class="status-msg" id="statusMsg">ожидание сервера</span>
+            <!-- Новая кнопка -->
+            <button class="calib-btn" id="homeBtn" style="margin-left: auto; border-color: #28a745; color: #28a745;">🏠 В ДОМ (0)</button>
+            <!-- Кнопка калибровки теперь не имеет margin-left: auto, чтобы стоять рядом -->
+            <button class="calib-btn" id="calibrateBtn" style="margin-left: 10px;">⟳ Калибровка</button>
+        </div>
+
+        <div class="status-bar">
+            <span class="status-dot wait" id="statusDot"></span>
+            <span class="status-label" id="statusLabel">Соединение...</span>
+            <span class="status-msg" id="statusMsg">ожидание сервера</span>
             <button class="calib-btn" id="calibrateBtn">⟳ Калибровка</button>
         </div>
 
@@ -282,6 +292,7 @@
         const rightMinus = document.getElementById('rightMinus');
 
         const statusDot = document.getElementById('statusDot');
+        const homeBtn = document.getElementById('homeBtn');
         const statusLabel = document.getElementById('statusLabel');
         const statusMsg = document.getElementById('statusMsg');
         const calibrateBtn = document.getElementById('calibrateBtn');
@@ -365,6 +376,29 @@
             } catch (e) {
                 setStatus('err', 'Ошибка: ' + e.message);
             }
+        }
+        async function doGoHome() {
+            if (isMoving) return;
+            setStatus('wait', 'Возврат в нулевую позицию...');
+            isMoving = true;
+            render();
+
+            try {
+                const result = await apiRequest('/go_home', 'POST');
+                if (result.success) {
+                    leftCm = 0;
+                    rightCm = 0;
+                    render();
+                    setStatus('ok', 'Станок вернулся в 0');
+                } else {
+                    setStatus('err', result.error || 'Ошибка при возврате домой');
+                }
+            } catch (e) {
+                setStatus('err', 'Ошибка: ' + e.message);
+            }
+
+            isMoving = false;
+            render();
         }
 
         // ============================================================
@@ -455,6 +489,7 @@
         leftMinus.addEventListener('click', () => doMove('x', -1));
         rightPlus.addEventListener('click', () => doMove('y', +1));
         rightMinus.addEventListener('click', () => doMove('y', -1));
+        homeBtn.addEventListener('click', doGoHome);
 
         calibrateBtn.addEventListener('click', doCalibrate);
 
