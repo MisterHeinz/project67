@@ -37,7 +37,7 @@ try:
     SERIAL_AVAILABLE = True
 except ImportError:
     SERIAL_AVAILABLE = False
-    print("pyserial не установлен. Установите: pip install pyserial")
+    print(" pyserial не установлен. Установите: pip install pyserial")
     print("   Сервер будет работать в режиме ЭМУЛЯЦИИ.")
 
 # ============================== РАБОТА С ПОРТОМ ==============================
@@ -50,7 +50,7 @@ def open_serial():
         ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=TIMEOUT)
         ser.flushInput()
         ser.flushOutput()
-        print(f"✅ Порт {SERIAL_PORT} открыт на скорости {BAUDRATE} бод")
+        print(f" Порт {SERIAL_PORT} открыт на скорости {BAUDRATE} бод")
         emulation = False
     except Exception as e:
         print(f"Не удалось открыть порт {SERIAL_PORT}: {e}")
@@ -69,8 +69,8 @@ def send_command(cmd):
     if emulation or ser is None:
         print(f"[EMU] -> {cmd}")
         time.sleep(0.05)
-        # Возвращаем фиктивный ответ, но координаты будут обновлены в do_move отдельно
         return True, "RMRESULT_SUCCESSOX0.00000OY0.00000OZ0.00000OA0.00000"
+    
     try:
         ser.write((cmd + '\n').encode('utf-8'))
         ser.flush()
@@ -91,32 +91,40 @@ def parse_response(response):
         return float(ox_match.group(1)), float(oy_match.group(1))
     return None, None
 
-def do_move(axis, amount_cm):
+# проверка границ
+def сheck_borders(axis, amount_mm):
     global current_x, current_y
-    amount_mm = amount_cm * 10
-
-    # Проверка границ
     if axis == 'x':
         new_pos = current_x + amount_mm
         if new_pos < 0 or new_pos > MAX_STROKE_MM:
-            return {"success": False, "error": f"Выход за границы (0..{MAX_STROKE_MM} мм)"}
-        ox = amount_mm
-        oy = 0.0
+            return None, {"success": False, "error": f"Выход за границы (0..{MAX_STROKE_MM} мм)"}
+        return {'new_pos': new_pos, 'ox': amount_mm, 'oy': 0.0}, None
     elif axis == 'y':
         new_pos = current_y + amount_mm
         if new_pos < 0 or new_pos > MAX_STROKE_MM:
-            return {"success": False, "error": f"Выход за границы (0..{MAX_STROKE_MM} мм)"}
-        ox = 0.0
-        oy = amount_mm
+            return None, {"success": False, "error": f"Выход за границы (0..{MAX_STROKE_MM} мм)"}
+        return {'new_pos': new_pos, 'ox': 0.0, 'oy': amount_mm}, None
     else:
-        return {"success": False, "error": "Неизвестная ось"}
+        return None, {"success": False, "error": "Неизвестная ось"}
+
+def do_move(axis, amount_cm):
+    global current_x, current_y
+    amount_mm = amount_cm * 10  # 1 см = 10 мм
+
+    params, err = сheck_borders(axis, amount_mm)
+    if err is not None:
+        return err
+
+    new_pos = params['new_pos']
+    ox = params['ox']
+    oy = params['oy']
 
     cmd = f"RMOX{ox:.1f}OY{oy:.1f}OZ0.0OA0.0SP{SPEED:.1f}AC{ACCEL:.1f}DC{DECEL:.1f}"
     ok, response = send_command(cmd)
     if not ok:
         return {"success": False, "error": "Ошибка отправки команды"}
 
-    # В эмуляции обновляем координаты расчётными значениями
+    # Обновляем координаты
     if emulation:
         if axis == 'x':
             current_x = new_pos
