@@ -37,8 +37,8 @@ try:
     SERIAL_AVAILABLE = True
 except ImportError:
     SERIAL_AVAILABLE = False
-    print(" pyserial не установлен. Установите: pip install pyserial")
-    print("   Сервер будет работать в режиме ЭМУЛЯЦИИ.")
+    print("ERROR: pyserial не установлен. Установите: pip install pyserial")
+    print("Сервер будет работать в режиме ЭМУЛЯЦИИ.")
 
 # ============================== РАБОТА С ПОРТОМ ==============================
 def open_serial():
@@ -53,8 +53,8 @@ def open_serial():
         print(f" Порт {SERIAL_PORT} открыт на скорости {BAUDRATE} бод")
         emulation = False
     except Exception as e:
-        print(f"Не удалось открыть порт {SERIAL_PORT}: {e}")
-        print(" Сервер переходит в режим ЭМУЛЯЦИИ.")
+        print(f"ERROR: Не удалось открыть порт {SERIAL_PORT}: {e}")
+        print("Сервер переходит в режим ЭМУЛЯЦИИ.")
         emulation = True
         ser = None
 
@@ -79,7 +79,7 @@ def send_command(cmd):
         print(f"[SER] <- {response}")
         return True, response
     except Exception as e:
-        print(f"Ошибка при обмене: {e}")
+        print(f"ERROR: Ошибка при обмене: {e}")
         return False, None
 
 def parse_response(response):
@@ -169,7 +169,7 @@ def do_move(axis, amount_cm):
                 current_x = new_pos
             else:
                 current_y = new_pos
-            print("Не удалось распарсить ответ, использую расчётную позицию")
+            print("ERROR: Не удалось распарсить ответ, использую расчётную позицию")
 
     return {"success": True, "position": {"x": current_x, "y": current_y}}
 
@@ -208,7 +208,7 @@ def do_move_absolute(axis, target_mm):
                 current_x = ox
             else:
                 current_y = oy
-            print("Не удалось распарсить ответ AM, использую заданные координаты")
+            print("ERROR: Не удалось распарсить ответ, использую заданные координаты")
 
     return {"success": True, "position": {"x": current_x, "y": current_y}}
 
@@ -283,6 +283,7 @@ def start_serial():
     print("Пытаемся подключить Teensy")
     open_serial()
     if emulation:
+        print("ERROR: не удалось подключить Teensy")
         print("Работаем в эмуляции без реального оборудования")
     else:
         print(f"Teensy подключена успешно (Порт: {SERIAL_PORT})")

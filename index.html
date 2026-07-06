@@ -23,43 +23,63 @@
 
         .container {
             background: white;
-            border-radius: 20px;
-            padding: 40px 60px;
+            border-radius: 24px;
+            padding: 40px 50px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             width: 100%;
-            max-width: 900px;
+            max-width: 1100px;
         }
 
         h1 {
             text-align: center;
             color: #333;
-            margin-bottom: 30px;
-            font-size: 24px;
+            margin-bottom: 35px;
+            font-size: 28px;
         }
 
         .main {
             display: grid;
-            grid-template-columns: auto 1fr auto;
-            align-items: center;
-            gap: 30px;
-            min-height: 300px;
+            grid-template-columns: 140px 1fr 140px;
+            align-items: stretch;
+            gap: 70px;
+            min-height: 320px;
         }
 
         .controls {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            justify-content: center;
+            align-items: center;
+            gap: 14px;
+            padding: 20px 10px;
+            background: #f8f9fa;
+            border-radius: 16px;
+            width: 140px;
+        }
+
+        .axis-title {
+            font-weight: 700;
+            font-size: 20px;
+            color: #2c3e50;
+            margin-bottom: 4px;
+            letter-spacing: 1px;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
             align-items: center;
         }
 
         .btn {
-            width: 70px;
-            height: 70px;
+            width: 72px;
+            height: 72px;
             font-size: 32px;
             font-weight: bold;
             border: 2px solid #333;
             background: white;
-            border-radius: 10px;
+            border-radius: 12px;
             cursor: pointer;
             transition: all 0.15s ease;
             user-select: none;
@@ -87,15 +107,29 @@
             color: #dc3545;
         }
 
+        .display-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 6px;
+        }
+
+        .hint {
+            font-size: 11px;
+            color: #6c757d;
+            margin-bottom: 3px;
+            text-align: center;
+            line-height: 1.2;
+        }
+
         .display {
-            margin-top: 8px;
-            padding: 8px 14px;
+            padding: 8px 16px;
             border: 2px solid #333;
-            border-radius: 6px;
+            border-radius: 8px;
             background: #fffbe6;
-            font-size: 15px;
+            font-size: 18px;
             font-weight: 600;
-            min-width: 70px;
+            min-width: 80px;
             text-align: center;
             color: #333;
             cursor: pointer;
@@ -108,7 +142,10 @@
 
         .line-area {
             position: relative;
-            height: 300px;
+            height: 320px;
+            background: #f0f2f5;
+            border-radius: 12px;
+            overflow: hidden;
         }
 
         .line-svg {
@@ -131,14 +168,14 @@
         }
 
         .info {
-            margin-top: 25px;
-            padding: 15px;
+            margin-top: 30px;
+            padding: 18px 22px;
             background: #f8f9fa;
             border-left: 4px solid #667eea;
-            border-radius: 6px;
-            font-size: 14px;
+            border-radius: 8px;
+            font-size: 15px;
             color: #555;
-            line-height: 1.6;
+            line-height: 1.7;
         }
 
         .info strong {
@@ -146,22 +183,22 @@
         }
 
         .status-bar {
-            margin-top: 12px;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 13px;
+            margin-top: 16px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
             background: #e9ecef;
             color: #495057;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 16px;
             flex-wrap: wrap;
         }
 
         .status-dot {
             display: inline-block;
-            width: 10px;
-            height: 10px;
+            width: 12px;
+            height: 12px;
             border-radius: 50%;
             background: #6c757d;
             flex-shrink: 0;
@@ -193,30 +230,42 @@
         <h1>Регулируемая линия — поднимите края кнопками</h1>
 
         <div class="main">
-            <!-- Левые кнопки (ось X) -->
+            <!-- Левая колонка (ось X) -->
             <div class="controls">
-                <button class="btn btn-plus" id="leftPlus">+</button>
-                <button class="btn btn-minus" id="leftMinus">−</button>
-                <div class="display" id="leftDisplay" title="Кликните, чтобы ввести положение в мм">0 мм</div>
+                <div class="axis-title">Ось X</div>
+                <div class="btn-group">
+                    <button class="btn btn-plus" id="leftPlus">+</button>
+                    <button class="btn btn-minus" id="leftMinus">−</button>
+                </div>
+                <div class="display-wrapper">
+                    <span class="hint">Нажмите, чтобы изменить координату</span>
+                    <div class="display" id="leftDisplay" title="Кликните, чтобы ввести положение в мм">0 мм</div>
+                </div>
             </div>
 
             <!-- Линия (SVG) -->
             <div class="line-area">
                 <svg class="line-svg" id="svg" viewBox="0 0 600 300" preserveAspectRatio="none">
-                    <line x1="20" y1="250" x2="580" y2="250"
+                    <line x1="30" y1="250" x2="570" y2="250"
                     stroke="#bbb" stroke-width="1" stroke-dasharray="6 6"/>
                     <line class="line" id="mainLine"
-                    x1="20" y1="250" x2="580" y2="250"/>
-                    <circle class="endpoint" id="leftDot" cx="20" cy="250" r="7"/>
-                    <circle class="endpoint" id="rightDot" cx="580" cy="250" r="7"/>
+                    x1="30" y1="250" x2="570" y2="250"/>
+                    <circle class="endpoint" id="leftDot" cx="30" cy="250" r="8"/>
+                    <circle class="endpoint" id="rightDot" cx="570" cy="250" r="8"/>
                 </svg>
             </div>
 
-            <!-- Правые кнопки (ось Y) -->
+            <!-- Правая колонка (ось Y) -->
             <div class="controls">
-                <button class="btn btn-plus" id="rightPlus">+</button>
-                <button class="btn btn-minus" id="rightMinus">−</button>
-                <div class="display" id="rightDisplay" title="Кликните, чтобы ввести положение в мм">0 мм</div>
+                <div class="axis-title">Ось Y</div>
+                <div class="btn-group">
+                    <button class="btn btn-plus" id="rightPlus">+</button>
+                    <button class="btn btn-minus" id="rightMinus">−</button>
+                </div>
+                <div class="display-wrapper">
+                    <span class="hint">Нажмите, чтобы изменить координату</span>
+                    <div class="display" id="rightDisplay" title="Кликните, чтобы ввести положение в мм">0 мм</div>
+                </div>
             </div>
         </div>
 
@@ -465,7 +514,7 @@
         render();
         init();
 
-        console.log('✅ Страница загружена. Сервер: ' + SERVER_URL);
+        console.log('   Страница загружена. Сервер: ' + SERVER_URL);
         console.log('   Левая сторона → ось X, правая сторона → ось Y');
         console.log('   Клик по дисплею → ввод абсолютной позиции в мм');
     </script>
