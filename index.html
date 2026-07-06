@@ -223,6 +223,31 @@
         .status-msg {
             color: #868e96;
         }
+
+        .calib-btn {
+            padding: 6px 16px;
+            border: 1px solid #667eea;
+            border-radius: 4px;
+            background: white;
+            color: #667eea;
+            cursor: pointer;
+            font-size: 13px;
+            transition: 0.15s;
+        }
+
+        .calib-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .calib-btn.home {
+            border-color: #28a745;
+            color: #28a745;
+        }
+        .calib-btn.home:hover {
+            background: #28a745;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -269,22 +294,13 @@
             </div>
         </div>
 
-        <!-- Статус соединения -->
-        <div class="status-bar">
-            <span class="status-dot wait" id="statusDot"></span>
-            <span class="status-label" id="statusLabel">Соединение...</span>
-            <span class="status-msg" id="statusMsg">ожидание сервера</span>
-            <!-- Новая кнопка -->
-            <button class="calib-btn" id="homeBtn" style="margin-left: auto; border-color: #28a745; color: #28a745;">🏠 В ДОМ (0)</button>
-            <!-- Кнопка калибровки теперь не имеет margin-left: auto, чтобы стоять рядом -->
-            <button class="calib-btn" id="calibrateBtn" style="margin-left: 10px;">⟳ Калибровка</button>
-        </div>
-
+        <!-- Статус с кнопками -->
         <div class="status-bar">
             <span class="status-dot wait" id="statusDot"></span>
             <span class="status-label" id="statusLabel">Соединение...</span>
             <span class="status-msg" id="statusMsg">ожидание сервера</span>
             <button class="calib-btn" id="calibrateBtn">⟳ Калибровка</button>
+            <button class="calib-btn home" id="homeBtn">🏠 В ДОМ (0)</button>
         </div>
 
         <div class="info">
@@ -306,7 +322,7 @@
         const SERVER_URL = window.location.origin;
 
         // ============================================================
-        //  СОСТОЯНИЕ
+        //  СОСТОЯНИЕ (только мм)
         // ============================================================
         let leftMm = 0;
         let rightMm = 0;
@@ -327,9 +343,10 @@
         const rightMinus = document.getElementById('rightMinus');
 
         const statusDot = document.getElementById('statusDot');
-        const homeBtn = document.getElementById('homeBtn');
         const statusLabel = document.getElementById('statusLabel');
         const statusMsg = document.getElementById('statusMsg');
+        const calibrateBtn = document.getElementById('calibrateBtn');
+        const homeBtn = document.getElementById('homeBtn');
 
         // ============================================================
         //  ОТРИСОВКА
@@ -393,18 +410,17 @@
         }
 
         // ============================================================
-        //  КАЛИБРОВКА
+        //  КАЛИБРОВКА (сброс координат на сервере в 0 без движения)
         // ============================================================
         async function doCalibrate() {
             setStatus('wait', 'Калибровка...');
             try {
                 const result = await apiRequest('/calibrate', 'POST');
                 if (result.success) {
-                    leftCm = 0;
-                    rightCm = 0;
-                    isCalibrated = true;
+                    leftMm = 0;
+                    rightMm = 0;
                     render();
-                    setStatus('ok', 'Калибровка выполнена, платформа на нуле');
+                    setStatus('ok', 'Координаты сброшены в 0 (без движения)');
                 } else {
                     setStatus('err', result.error || 'Ошибка калибровки');
                 }
@@ -412,6 +428,10 @@
                 setStatus('err', 'Ошибка: ' + e.message);
             }
         }
+
+        // ============================================================
+        //  ВОЗВРАТ В ДОМ (физическое движение в 0)
+        // ============================================================
         async function doGoHome() {
             if (isMoving) return;
             setStatus('wait', 'Возврат в нулевую позицию...');
@@ -421,8 +441,8 @@
             try {
                 const result = await apiRequest('/go_home', 'POST');
                 if (result.success) {
-                    leftCm = 0;
-                    rightCm = 0;
+                    leftMm = 0;
+                    rightMm = 0;
                     render();
                     setStatus('ok', 'Станок вернулся в 0');
                 } else {
@@ -437,7 +457,7 @@
         }
 
         // ============================================================
-        //  ДВИЖЕНИЕ
+        //  ОТНОСИТЕЛЬНОЕ ДВИЖЕНИЕ
         // ============================================================
         async function doMove(axis, amountCm) {
             if (isMoving) return;
@@ -472,7 +492,7 @@
         }
 
         // ============================================================
-        //  ДВИЖЕНИЕ (АБСОЛЮТНОЕ)
+        //  АБСОЛЮТНОЕ ДВИЖЕНИЕ
         // ============================================================
         async function doMoveAbsolute(axis) {
             if (isMoving) return;
@@ -560,10 +580,12 @@
         leftMinus.addEventListener('click', () => doMove('x', -1));
         rightPlus.addEventListener('click', () => doMove('y', +1));
         rightMinus.addEventListener('click', () => doMove('y', -1));
-        homeBtn.addEventListener('click', doGoHome);
 
         leftDisplay.addEventListener('click', () => doMoveAbsolute('x'));
         rightDisplay.addEventListener('click', () => doMoveAbsolute('y'));
+
+        calibrateBtn.addEventListener('click', doCalibrate);
+        homeBtn.addEventListener('click', doGoHome);
 
         // ============================================================
         //  СТАРТ
@@ -571,7 +593,7 @@
         render();
         init();
 
-        console.log('   Страница загружена. Сервер: ' + SERVER_URL);
+        console.log('✅ Страница загружена. Сервер: ' + SERVER_URL);
         console.log('   Левая сторона → ось X, правая сторона → ось Y');
         console.log('   Клик по дисплею → ввод абсолютной позиции в мм');
     </script>
