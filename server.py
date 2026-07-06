@@ -48,8 +48,8 @@ def open_serial():
         return
     try:
         ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=TIMEOUT)
-        ser.flushInput()
-        ser.flushOutput()
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
         print(f" Порт {SERIAL_PORT} открыт на скорости {BAUDRATE} бод")
         emulation = False
     except Exception as e:
@@ -212,6 +212,26 @@ def do_move_absolute(axis, target_mm):
 
     return {"success": True, "position": {"x": current_x, "y": current_y}}
 
+def do_go_home():
+    global current_x, current_y
+    if current_x == 0.0 and current_y == 0.0:
+        return {"success": True, "position": {"x": 0.0, "y": 0.0}}
+
+    # Вычисляем дельту для возврата в 0. 
+    # Если мы стоим в +20мм, то нужно передать -20мм, чтобы стать в 0.
+    ox_needed = -current_x
+    oy_needed = -current_y
+
+    cmd = f"RMOX{ox_needed:.1f}OY{oy_needed:.1f}OZ0.0OA0.0SP{SPEED:.1f}AC{ACCEL:.1f}DC{DECEL:.1f}"
+    ok, response = send_command(cmd)
+    if not ok:
+        return {"success": False, "error": "Ошибка отправки команды возврата"}
+
+    # Принудительно выставляем в 0, так как мы вернулись домой
+    current_x = 0.0
+    current_y = 0.0
+    return {"success": True, "position": {"x": current_x, "y": current_y}}
+
 # ============================== ОБРАБОТКА HTTP ==============================
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -232,7 +252,32 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == '/move':
+        
+        # 1. Сброс текущего положения в НОЛЬ
+        if parsed.path == '/calibrate':
+            global current_x, current_y
+            current_x = 0.0
+            current_y = 0.0
+            print("[SYS] Произведена калибровка: текущая позиция принята за 0.0")
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+            return
+
+        # 2. Возврат в нулевую позицию
+        elif parsed.path == '/go_home':
+            result = do_go_home()
+            status = 200 if result.get('success') else 400
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode('utf-8'))
+            return
+
+        # 3. Стандартное движение (уже существующий код)
+        elif parsed.path == '/move':
             content_length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(content_length).decode('utf-8')
             try:
