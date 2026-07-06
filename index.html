@@ -37,7 +37,6 @@
             font-size: 24px;
         }
 
-        /* Основная зона: 3 колонки — левые кнопки, линия, правые кнопки */
         .main {
             display: grid;
             grid-template-columns: auto 1fr auto;
@@ -99,14 +98,17 @@
             min-width: 70px;
             text-align: center;
             color: #333;
+            cursor: pointer;
+            transition: background 0.2s;
         }
 
-        /* Область линии */
+        .display:hover {
+            background: #e6e6c0;
+        }
+
         .line-area {
             position: relative;
             height: 300px;
-            /* Линия должна двигаться от 0 (внизу) до 5 см вверх с каждой стороны.
-               1 см = 30 px для наглядности. Максимум смещение = 150 px. */
         }
 
         .line-svg {
@@ -120,7 +122,6 @@
             stroke-width: 6;
             stroke-linecap: round;
             transition: none;
-            /* мгновенная реакция при нажатии */;
         }
 
         .endpoint {
@@ -144,7 +145,6 @@
             color: #333;
         }
 
-        /* статус соединения */
         .status-bar {
             margin-top: 12px;
             padding: 8px 16px;
@@ -157,6 +157,7 @@
             gap: 12px;
             flex-wrap: wrap;
         }
+
         .status-dot {
             display: inline-block;
             width: 10px;
@@ -165,35 +166,25 @@
             background: #6c757d;
             flex-shrink: 0;
         }
+
         .status-dot.ok {
             background: #28a745;
         }
+
         .status-dot.err {
             background: #dc3545;
         }
+
         .status-dot.wait {
             background: #ffc107;
         }
+
         .status-label {
             font-weight: 600;
         }
+
         .status-msg {
             color: #868e96;
-        }
-        .calib-btn {
-            margin-left: auto;
-            padding: 4px 16px;
-            border: 1px solid #667eea;
-            border-radius: 4px;
-            background: white;
-            color: #667eea;
-            cursor: pointer;
-            font-size: 13px;
-            transition: 0.15s;
-        }
-        .calib-btn:hover {
-            background: #667eea;
-            color: white;
         }
     </style>
 </head>
@@ -206,19 +197,16 @@
             <div class="controls">
                 <button class="btn btn-plus" id="leftPlus">+</button>
                 <button class="btn btn-minus" id="leftMinus">−</button>
-                <div class="display" id="leftDisplay">0 см</div>
+                <div class="display" id="leftDisplay" title="Кликните, чтобы ввести положение в мм">0 мм</div>
             </div>
 
             <!-- Линия (SVG) -->
             <div class="line-area">
                 <svg class="line-svg" id="svg" viewBox="0 0 600 300" preserveAspectRatio="none">
-                    <!-- Пунктирная базовая линия (изначальное положение) -->
                     <line x1="20" y1="250" x2="580" y2="250"
                     stroke="#bbb" stroke-width="1" stroke-dasharray="6 6"/>
-                    <!-- Основная линия -->
                     <line class="line" id="mainLine"
                     x1="20" y1="250" x2="580" y2="250"/>
-                    <!-- Точки на концах -->
                     <circle class="endpoint" id="leftDot" cx="20" cy="250" r="7"/>
                     <circle class="endpoint" id="rightDot" cx="580" cy="250" r="7"/>
                 </svg>
@@ -228,24 +216,22 @@
             <div class="controls">
                 <button class="btn btn-plus" id="rightPlus">+</button>
                 <button class="btn btn-minus" id="rightMinus">−</button>
-                <div class="display" id="rightDisplay">0 см</div>
+                <div class="display" id="rightDisplay" title="Кликните, чтобы ввести положение в мм">0 мм</div>
             </div>
         </div>
 
-        <!-- Статус и кнопка ручной калибровки -->
+        <!-- Статус соединения -->
         <div class="status-bar">
             <span class="status-dot wait" id="statusDot"></span>
             <span class="status-label" id="statusLabel">Соединение...</span>
             <span class="status-msg" id="statusMsg">ожидание сервера</span>
-            <button class="calib-btn" id="calibrateBtn">⟳ Калибровка</button>
         </div>
 
         <div class="info">
-            <strong>Как это работает:</strong> Каждое нажатие на «+» поднимает соответствующий край линии на 1 см
-            (максимум 5 см). Кнопка «−» опускает край обратно (не ниже изначального положения).
-            Текущая высота каждого края отображается под кнопками в реальном времени.
+            <strong>Как это работает:</strong> Кнопки «+» / «−» поднимают / опускают край на 1 см (10 мм).
+            <strong>Клик</strong> по числовому значению (дисплей) открывает окно для ввода абсолютного положения в миллиметрах (0–50 мм).
             <br><strong>Ось X</strong> — левая сторона, <strong>ось Y</strong> — правая сторона.
-            При запуске выполняется автоматическая калибровка.
+            <br>Сервер автоматически корректирует движение, чтобы не выйти за границы.
         </div>
     </div>
 
@@ -253,18 +239,17 @@
         // ============================================================
         //  КОНФИГУРАЦИЯ
         // ============================================================
-        const MAX_CM = 5; // максимум 5 см вверх
-        const MIN_CM = 0; // минимум — изначальное положение
-        const PX_PER_CM = 30; // 1 см = 30 пикселей (визуально)
-        const BASE_Y = 250; // Y-координата изначального положения линии в SVG
+        const MAX_MM = 50;
+        const MIN_MM = 0;
+        const PX_PER_CM = 30;
+        const BASE_Y = 250;
         const SERVER_URL = window.location.origin;
 
         // ============================================================
         //  СОСТОЯНИЕ
         // ============================================================
-        let leftCm = 0; // ось X
-        let rightCm = 0; // ось Y
-        let isCalibrated = false;
+        let leftMm = 0;
+        let rightMm = 0;
         let isMoving = false;
 
         // ============================================================
@@ -284,28 +269,28 @@
         const statusDot = document.getElementById('statusDot');
         const statusLabel = document.getElementById('statusLabel');
         const statusMsg = document.getElementById('statusMsg');
-        const calibrateBtn = document.getElementById('calibrateBtn');
 
         // ============================================================
-        //  ОТРИСОВКА SVG (только визуал, без отправки на сервер)
+        //  ОТРИСОВКА
         // ============================================================
         function render() {
-            const leftY = BASE_Y - leftCm * PX_PER_CM;
-            const rightY = BASE_Y - rightCm * PX_PER_CM;
+            const leftCmVis = leftMm / 10;
+            const rightCmVis = rightMm / 10;
+            const leftY = BASE_Y - leftCmVis * PX_PER_CM;
+            const rightY = BASE_Y - rightCmVis * PX_PER_CM;
 
             mainLine.setAttribute('y1', leftY);
             mainLine.setAttribute('y2', rightY);
             leftDot.setAttribute('cy', leftY);
             rightDot.setAttribute('cy', rightY);
 
-            leftDisplay.textContent = leftCm + ' см';
-            rightDisplay.textContent = rightCm + ' см';
+            leftDisplay.textContent = leftMm + ' мм';
+            rightDisplay.textContent = rightMm + ' мм';
 
-            // Блокируем кнопки по границам (дополнительная защита)
-            leftPlus.disabled = leftCm >= MAX_CM || isMoving;
-            leftMinus.disabled = leftCm <= MIN_CM || isMoving;
-            rightPlus.disabled = rightCm >= MAX_CM || isMoving;
-            rightMinus.disabled = rightCm <= MIN_CM || isMoving;
+            leftPlus.disabled = leftMm >= MAX_MM || isMoving;
+            leftMinus.disabled = leftMm <= MIN_MM || isMoving;
+            rightPlus.disabled = rightMm >= MAX_MM || isMoving;
+            rightMinus.disabled = rightMm <= MIN_MM || isMoving;
         }
 
         // ============================================================
@@ -330,7 +315,7 @@
         }
 
         // ============================================================
-        //  HTTP-ЗАПРОСЫ К СЕРВЕРУ
+        //  HTTP
         // ============================================================
         async function apiRequest(endpoint, method = 'POST', body = null) {
             const opts = {
@@ -347,54 +332,26 @@
         }
 
         // ============================================================
-        //  КАЛИБРОВКА
-        // ============================================================
-        async function doCalibrate() {
-            setStatus('wait', 'Калибровка...');
-            try {
-                const result = await apiRequest('/calibrate', 'POST');
-                if (result.success) {
-                    leftCm = 0;
-                    rightCm = 0;
-                    isCalibrated = true;
-                    render();
-                    setStatus('ok', 'Калибровка выполнена, платформа на нуле');
-                } else {
-                    setStatus('err', result.error || 'Ошибка калибровки');
-                }
-            } catch (e) {
-                setStatus('err', 'Ошибка: ' + e.message);
-            }
-        }
-
-        // ============================================================
-        //  ДВИЖЕНИЕ
+        //  ДВИЖЕНИЕ (ОТНОСИТЕЛЬНОЕ)
         // ============================================================
         async function doMove(axis, amountCm) {
-            // amountCm: +1 = вверх, -1 = вниз
             if (isMoving) return;
-            if (axis === 'x') {
-                const newVal = leftCm + amountCm;
-                if (newVal < MIN_CM || newVal > MAX_CM) return;
-            } else {
-                const newVal = rightCm + amountCm;
-                if (newVal < MIN_CM || newVal > MAX_CM) return;
-            }
-
             isMoving = true;
             render();
 
             try {
                 const result = await apiRequest('/move', 'POST', {
                     axis: axis,
-                    amount: amountCm // в см, сервер переведёт в мм
+                    amount: amountCm
                 });
 
                 if (result.success) {
-                    if (axis === 'x') {
-                        leftCm += amountCm;
-                    } else {
-                        rightCm += amountCm;
+                    if (result.position) {
+                        if (axis === 'x') {
+                            leftMm = result.position.x;
+                        } else {
+                            rightMm = result.position.y;
+                        }
                     }
                     render();
                     setStatus('ok', 'Движение выполнено');
@@ -410,7 +367,55 @@
         }
 
         // ============================================================
-        //  ПРОВЕРКА ЗДОРОВЬЯ СЕРВЕРА
+        //  ДВИЖЕНИЕ (АБСОЛЮТНОЕ)
+        // ============================================================
+        async function doMoveAbsolute(axis) {
+            if (isMoving) return;
+            let currentVal = (axis === 'x') ? leftMm : rightMm;
+            let input = prompt(`Введите положение для оси ${axis.toUpperCase()} в миллиметрах (0–${MAX_MM}):`, currentVal);
+            if (input === null) return;
+            let target = parseFloat(input);
+            if (isNaN(target)) {
+                alert('Введите число');
+                return;
+            }
+            if (target < MIN_MM || target > MAX_MM) {
+                alert(`Значение должно быть от ${MIN_MM} до ${MAX_MM} мм`);
+                return;
+            }
+
+            isMoving = true;
+            render();
+
+            try {
+                const result = await apiRequest('/move_abs', 'POST', {
+                    axis: axis,
+                    target_mm: target
+                });
+
+                if (result.success) {
+                    if (result.position) {
+                        if (axis === 'x') {
+                            leftMm = result.position.x;
+                        } else {
+                            rightMm = result.position.y;
+                        }
+                    }
+                    render();
+                    setStatus('ok', `Перемещено на ${target} мм`);
+                } else {
+                    setStatus('err', result.error || 'Ошибка перемещения');
+                }
+            } catch (e) {
+                setStatus('err', 'Ошибка: ' + e.message);
+            }
+
+            isMoving = false;
+            render();
+        }
+
+        // ============================================================
+        //  ПРОВЕРКА СЕРВЕРА
         // ============================================================
         async function pingServer() {
             try {
@@ -437,26 +442,22 @@
         //  ИНИЦИАЛИЗАЦИЯ
         // ============================================================
         async function init() {
-            // Проверяем сервер
-            const ok = await pingServer();
-            if (ok) {
-                // Автокалибровка
-                await doCalibrate();
-            } else {
-                // Периодически пробуем переподключиться
+            await pingServer();
+            if (statusDot.className.includes('err')) {
                 setTimeout(init, 5000);
             }
         }
 
         // ============================================================
-        //  ОБРАБОТЧИКИ КНОПОК
+        //  ОБРАБОТЧИКИ
         // ============================================================
         leftPlus.addEventListener('click', () => doMove('x', +1));
         leftMinus.addEventListener('click', () => doMove('x', -1));
         rightPlus.addEventListener('click', () => doMove('y', +1));
         rightMinus.addEventListener('click', () => doMove('y', -1));
 
-        calibrateBtn.addEventListener('click', doCalibrate);
+        leftDisplay.addEventListener('click', () => doMoveAbsolute('x'));
+        rightDisplay.addEventListener('click', () => doMoveAbsolute('y'));
 
         // ============================================================
         //  СТАРТ
@@ -466,7 +467,7 @@
 
         console.log('✅ Страница загружена. Сервер: ' + SERVER_URL);
         console.log('   Левая сторона → ось X, правая сторона → ось Y');
-        console.log('   Команды: RM OX±10.0 / OY±10.0, SP30 AC50 DC50');
+        console.log('   Клик по дисплею → ввод абсолютной позиции в мм');
     </script>
 </body>
 </html>

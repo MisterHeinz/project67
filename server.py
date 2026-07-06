@@ -69,7 +69,7 @@ def send_command(cmd):
     if emulation or ser is None:
         print(f"[EMU] -> {cmd}")
         time.sleep(0.05)
-        return True, "RMRESULT_SUCCESSOX0.00000OY0.00000OZ0.00000OA0.00000"
+        return True, f"RMRESULT_SUCCESSOX{current_x:.5f}OY{current_y:.5f}OZ0.00000OA0.00000"
     
     try:
         ser.write((cmd + '\n').encode('utf-8'))
@@ -91,33 +91,61 @@ def parse_response(response):
         return float(ox_match.group(1)), float(oy_match.group(1))
     return None, None
 
-# проверка границ
-def сheck_borders(axis, amount_mm):
-    global current_x, current_y
+# ============================== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ОТНОСИТЕЛЬНОГО ДВИЖЕНИЯ ==============================
+def calc_relative_move(axis, current, amount_mm):
+    """
+    Вычисляет фактическое смещение с учётом границ 0..MAX_STROKE_MM.
+    Возвращает словарь с actual_mm, ox, oy, new_pos, либо None и сообщение об ошибке.
+    """
     if axis == 'x':
-        new_pos = current_x + amount_mm
-        if new_pos < 0 or new_pos > MAX_STROKE_MM:
-            return None, {"success": False, "error": f"Выход за границы (0..{MAX_STROKE_MM} мм)"}
-        return {'new_pos': new_pos, 'ox': amount_mm, 'oy': 0.0}, None
+        ox, oy = amount_mm, 0.0
     elif axis == 'y':
-        new_pos = current_y + amount_mm
-        if new_pos < 0 or new_pos > MAX_STROKE_MM:
-            return None, {"success": False, "error": f"Выход за границы (0..{MAX_STROKE_MM} мм)"}
-        return {'new_pos': new_pos, 'ox': 0.0, 'oy': amount_mm}, None
+        ox, oy = 0.0, amount_mm
     else:
         return None, {"success": False, "error": "Неизвестная ось"}
 
+    max_possible = MAX_STROKE_MM - current
+    min_possible = -current
+
+    if amount_mm > 0:
+        actual_mm = min(amount_mm, max_possible)
+    else:
+        actual_mm = max(amount_mm, min_possible)  # amount_mm отрицательный
+
+    if actual_mm == 0:
+        # уже на границе, движения нет
+        return None, {"success": True, "position": {"x": current_x, "y": current_y}, "note": "already at limit"}
+
+    new_pos = current + actual_mm
+    if new_pos < 0 or new_pos > MAX_STROKE_MM:
+        return None, {"success": False, "error": f"Выход за границы (0..{MAX_STROKE_MM} мм)"}
+
+    return {
+        'actual_mm': actual_mm,
+        'ox': ox if axis == 'x' else 0.0,
+        'oy': oy if axis == 'y' else 0.0,
+        'new_pos': new_pos
+    }, None
+
+# ============================== ОТНОСИТЕЛЬНОЕ ДВИЖЕНИЕ ==============================
 def do_move(axis, amount_cm):
     global current_x, current_y
     amount_mm = amount_cm * 10  # 1 см = 10 мм
 
-    params, err = сheck_borders(axis, amount_mm)
+    # Выбираем текущую позицию для оси
+    current = current_x if axis == 'x' else current_y
+
+    params, err = calc_relative_move(axis, current, amount_mm)
     if err is not None:
         return err
+    if params is None:
+        # если движения нет (уже на границе)
+        return {"success": True, "position": {"x": current_x, "y": current_y}, "note": "already at limit"}
 
-    new_pos = params['new_pos']
+    actual_mm = params['actual_mm']
     ox = params['ox']
     oy = params['oy']
+    new_pos = params['new_pos']
 
     cmd = f"RMOX{ox:.1f}OY{oy:.1f}OZ0.0OA0.0SP{SPEED:.1f}AC{ACCEL:.1f}DC{DECEL:.1f}"
     ok, response = send_command(cmd)
@@ -136,12 +164,51 @@ def do_move(axis, amount_cm):
             current_x = x
             current_y = y
         else:
-            # Если не удалось распарсить, используем расчётное значение
+            # fallback
             if axis == 'x':
                 current_x = new_pos
             else:
                 current_y = new_pos
             print("Не удалось распарсить ответ, использую расчётную позицию")
+
+    return {"success": True, "position": {"x": current_x, "y": current_y}}
+
+# ============================== АБСОЛЮТНОЕ ПЕРЕМЕЩЕНИЕ ==============================
+def do_move_absolute(axis, target_mm):
+    global current_x, current_y
+
+    if target_mm < 0 or target_mm > MAX_STROKE_MM:
+        return {"success": False, "error": f"Цель вне границ (0..{MAX_STROKE_MM} мм)"}
+
+    if axis == 'x':
+        ox = target_mm
+        oy = current_y
+    else:  # axis == 'y'
+        ox = current_x
+        oy = target_mm
+
+    cmd = f"AMOX{ox:.1f}OY{oy:.1f}OZ0.0OA0.0SP{SPEED:.1f}AC{ACCEL:.1f}DC{DECEL:.1f}"
+    ok, response = send_command(cmd)
+    if not ok:
+        return {"success": False, "error": "Ошибка отправки команды AM"}
+
+    # Обновляем координаты
+    if emulation:
+        if axis == 'x':
+            current_x = ox
+        else:
+            current_y = oy
+    else:
+        x, y = parse_response(response)
+        if x is not None and y is not None:
+            current_x = x
+            current_y = y
+        else:
+            if axis == 'x':
+                current_x = ox
+            else:
+                current_y = oy
+            print("Не удалось распарсить ответ AM, использую заданные координаты")
 
     return {"success": True, "position": {"x": current_x, "y": current_y}}
 
@@ -185,6 +252,28 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(result).encode('utf-8'))
             return
+
+        elif parsed.path == '/move_abs':
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            try:
+                data = json.loads(body)
+            except:
+                self.send_error(400, "Invalid JSON")
+                return
+            axis = data.get('axis')
+            target_mm = data.get('target_mm')
+            if axis not in ('x', 'y') or target_mm is None:
+                self.send_error(400, "Invalid parameters")
+                return
+            result = do_move_absolute(axis, float(target_mm))
+            status = 200 if result.get('success') else 400
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode('utf-8'))
+            return
+
         else:
             self.send_error(404, "Not found")
 
@@ -211,6 +300,7 @@ def main():
             httpd.serve_forever()
         except KeyboardInterrupt:
             print("\nСервер остановлен.")
+            close_serial()
 
 if __name__ == "__main__":
     main()
