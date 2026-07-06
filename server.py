@@ -37,8 +37,8 @@ try:
     SERIAL_AVAILABLE = True
 except ImportError:
     SERIAL_AVAILABLE = False
-    print(" pyserial не установлен. Установите: pip install pyserial")
-    print("   Сервер будет работать в режиме ЭМУЛЯЦИИ.")
+    print("pyserial не установлен. Установите: pip install pyserial")
+    print("Сервер будет работать в режиме ЭМУЛЯЦИИ.")
 
 # ============================== РАБОТА С ПОРТОМ ==============================
 def open_serial():
