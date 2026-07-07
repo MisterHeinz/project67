@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Регулируемая линия</title>
     <style>
         * {
@@ -13,7 +13,7 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, sans-serif;
-            background: linear-gradient(90deg, #000000 0%, #888888 100%);
+            background: gray;
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -48,96 +48,101 @@
         .controls {
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
-            gap: 14px;
+            justify-content: center;
+            gap: 8px;
             padding: 20px 10px;
             background: #f8f9fa;
             border-radius: 16px;
             width: 140px;
+            position: relative;
         }
 
-        .axis-title {
-            font-weight: 700;
-            font-size: 20px;
-            color: #2c3e50;
-            margin-bottom: 4px;
-            letter-spacing: 1px;
+        .motor-svg {
+            width: 80px;
+            height: auto;
+            display: block;
+            margin: 0 auto 4px auto;
+            flex-shrink: 0;
         }
 
-        .btn-group {
+        .motor-svg.flipped {
+            transform: scaleX(-1);
+        }
+
+        .slider-wrapper {
             display: flex;
             flex-direction: column;
-            gap: 10px;
             align-items: center;
+            justify-content: center;
+            height: 190px;
+            width: 100%;
+            position: relative;
         }
 
-        .btn {
-            width: 72px;
-            height: 72px;
-            font-size: 32px;
-            font-weight: bold;
-            border: 2px solid #333;
-            background: white;
-            border-radius: 12px;
+        .zero-marker {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 12px;
+            font-weight: 600;
+            color: #888;
+            pointer-events: none;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 0 4px;
+            border-radius: 2px;
+            z-index: 1;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            transform: rotate(270deg);
+            width: 150px;
+            height: 8px;
+            background: #ccc;
+            border-radius: 4px;
+            outline: none;
             cursor: pointer;
-            transition: all 0.15s ease;
-            user-select: none;
+            position: relative;
+            z-index: 2;
         }
 
-        .btn:hover:not(:disabled) {
-            background: #f0f0f0;
-            transform: scale(1.05);
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #2c3e50;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
         }
 
-        .btn:active:not(:disabled) {
-            transform: scale(0.95);
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #2c3e50;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
         }
 
-        .btn:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-
-        .btn-plus {
-            color: #28a745;
-        }
-
-        .btn-minus {
-            color: #dc3545;
-        }
-
-        .display-wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-top: 6px;
-        }
-
-        .hint {
-            font-size: 11px;
-            color: #6c757d;
-            margin-bottom: 3px;
-            text-align: center;
-            line-height: 1.2;
-        }
-
-        .display {
-            padding: 8px 16px;
-            border: 2px solid #333;
-            border-radius: 8px;
-            background: #fffbe6;
+        .slider-value {
+            margin-top: 10px;
             font-size: 18px;
             font-weight: 600;
-            min-width: 80px;
-            text-align: center;
             color: #333;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .display:hover {
-            background: #e6e6c0;
+            background: #fffbe6;
+            padding: 4px 14px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            display: inline-block;
+            min-width: 70px;
+            text-align: center;
         }
 
         .line-area {
@@ -203,15 +208,12 @@
             background: #6c757d;
             flex-shrink: 0;
         }
-
         .status-dot.ok {
             background: #28a745;
         }
-
         .status-dot.err {
             background: #dc3545;
         }
-
         .status-dot.wait {
             background: #ffc107;
         }
@@ -219,7 +221,6 @@
         .status-label {
             font-weight: 600;
         }
-
         .status-msg {
             color: #868e96;
         }
@@ -234,12 +235,10 @@
             font-size: 13px;
             transition: 0.15s;
         }
-
         .calib-btn:hover {
             background: #667eea;
             color: white;
         }
-
         .calib-btn.home {
             border-color: #28a745;
             color: #28a745;
@@ -252,45 +251,53 @@
 </head>
 <body>
     <div class="container">
-        <h1>Регулируемая линия — поднимите края кнопками</h1>
+        <h1>Регулируемая линия — установите края ползунками</h1>
 
         <div class="main">
             <!-- Левая колонка (ось X) -->
             <div class="controls">
-                <div class="axis-title">Ось X</div>
-                <div class="btn-group">
-                    <button class="btn btn-plus" id="leftPlus">+</button>
-                    <button class="btn btn-minus" id="leftMinus">−</button>
+                <svg class="motor-svg" viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="10" y="10" width="55" height="40" fill="#2d2d2d" stroke="#1a1a1a" stroke-width="2"/>
+                    <rect x="12" y="12" width="51" height="8" fill="#3a3a3a"/>
+                    <rect x="12" y="40" width="51" height="8" fill="#3a3a3a"/>
+                    <rect x="65" y="25" width="25" height="10" fill="#888888" stroke="#666666" stroke-width="1"/>
+                    <rect x="85" y="23" width="8" height="14" fill="#999999" stroke="#777777" stroke-width="1"/>
+                    <rect x="8" y="8" width="4" height="6" fill="#1a1a1a"/>
+                    <rect x="8" y="46" width="4" height="6" fill="#1a1a1a"/>
+                </svg>
+                <div class="slider-wrapper">
+                    <input type="range" id="leftSlider" min="-50" max="50" value="0" step="1" />
+                    <span class="zero-marker">0</span>
                 </div>
-                <div class="display-wrapper">
-                    <span class="hint">Нажмите, чтобы изменить координату</span>
-                    <div class="display" id="leftDisplay" title="Кликните, чтобы ввести положение в мм">0 мм</div>
-                </div>
+                <span class="slider-value" id="leftSliderValue">0 мм</span>
             </div>
 
             <!-- Линия (SVG) -->
             <div class="line-area">
                 <svg class="line-svg" id="svg" viewBox="0 0 600 300" preserveAspectRatio="none">
-                    <line x1="30" y1="250" x2="570" y2="250"
-                    stroke="#bbb" stroke-width="1" stroke-dasharray="6 6"/>
-                    <line class="line" id="mainLine"
-                    x1="30" y1="250" x2="570" y2="250"/>
-                    <circle class="endpoint" id="leftDot" cx="30" cy="250" r="8"/>
-                    <circle class="endpoint" id="rightDot" cx="570" cy="250" r="8"/>
+                    <line x1="30" y1="150" x2="570" y2="150" stroke="#bbb" stroke-width="1" stroke-dasharray="6 6" />
+                    <line class="line" id="mainLine" x1="30" y1="150" x2="570" y2="150" />
+                    <circle class="endpoint" id="leftDot" cx="30" cy="150" r="8" />
+                    <circle class="endpoint" id="rightDot" cx="570" cy="150" r="8" />
                 </svg>
             </div>
 
             <!-- Правая колонка (ось Y) -->
             <div class="controls">
-                <div class="axis-title">Ось Y</div>
-                <div class="btn-group">
-                    <button class="btn btn-plus" id="rightPlus">+</button>
-                    <button class="btn btn-minus" id="rightMinus">−</button>
+                <svg class="motor-svg flipped" viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="10" y="10" width="55" height="40" fill="#2d2d2d" stroke="#1a1a1a" stroke-width="2"/>
+                    <rect x="12" y="12" width="51" height="8" fill="#3a3a3a"/>
+                    <rect x="12" y="40" width="51" height="8" fill="#3a3a3a"/>
+                    <rect x="65" y="25" width="25" height="10" fill="#888888" stroke="#666666" stroke-width="1"/>
+                    <rect x="85" y="23" width="8" height="14" fill="#999999" stroke="#777777" stroke-width="1"/>
+                    <rect x="8" y="8" width="4" height="6" fill="#1a1a1a"/>
+                    <rect x="8" y="46" width="4" height="6" fill="#1a1a1a"/>
+                </svg>
+                <div class="slider-wrapper">
+                    <input type="range" id="rightSlider" min="-50" max="50" value="0" step="1" />
+                    <span class="zero-marker">0</span>
                 </div>
-                <div class="display-wrapper">
-                    <span class="hint">Нажмите, чтобы изменить координату</span>
-                    <div class="display" id="rightDisplay" title="Кликните, чтобы ввести положение в мм">0 мм</div>
-                </div>
+                <span class="slider-value" id="rightSliderValue">0 мм</span>
             </div>
         </div>
 
@@ -304,10 +311,11 @@
         </div>
 
         <div class="info">
-            <strong>Как это работает:</strong> Кнопки «+» / «−» поднимают / опускают край на 1 см (10 мм).
-            <strong>Клик</strong> по числовому значению (дисплей) открывает окно для ввода абсолютного положения в миллиметрах (0–50 мм).
-            <br><strong>Ось X</strong> — левая сторона, <strong>ось Y</strong> — правая сторона.
-            <br>Сервер автоматически корректирует движение, чтобы не выйти за границы.
+            <strong>Как это работает:</strong> Перемещайте ползунок, чтобы задать положение края (в мм, от −50 до +50).
+            После отпускания ползунка платформа перемещается в указанную позицию.
+            <br /><strong>Ось X</strong> — левая сторона, <strong>ось Y</strong> — правая сторона.
+            <br />Сервер автоматически корректирует движение, чтобы не выйти за границы (−50…+50 мм).
+            <br />Нулевое положение платформы находится по центру, а крайние положения — с отступом от краёв.
         </div>
     </div>
 
@@ -316,13 +324,14 @@
         //  КОНФИГУРАЦИЯ
         // ============================================================
         const MAX_MM = 50;
-        const MIN_MM = 0;
-        const PX_PER_CM = 30;
-        const BASE_Y = 250;
+        const MIN_MM = -50;
+        const PX_PER_CM = 24;
+        const BASE_Y = 150;
+        const SVG_HEIGHT = 300;
         const SERVER_URL = window.location.origin;
 
         // ============================================================
-        //  СОСТОЯНИЕ (только мм)
+        //  СОСТОЯНИЕ
         // ============================================================
         let leftMm = 0;
         let rightMm = 0;
@@ -334,13 +343,11 @@
         const mainLine = document.getElementById('mainLine');
         const leftDot = document.getElementById('leftDot');
         const rightDot = document.getElementById('rightDot');
-        const leftDisplay = document.getElementById('leftDisplay');
-        const rightDisplay = document.getElementById('rightDisplay');
 
-        const leftPlus = document.getElementById('leftPlus');
-        const leftMinus = document.getElementById('leftMinus');
-        const rightPlus = document.getElementById('rightPlus');
-        const rightMinus = document.getElementById('rightMinus');
+        const leftSlider = document.getElementById('leftSlider');
+        const rightSlider = document.getElementById('rightSlider');
+        const leftSliderValue = document.getElementById('leftSliderValue');
+        const rightSliderValue = document.getElementById('rightSliderValue');
 
         const statusDot = document.getElementById('statusDot');
         const statusLabel = document.getElementById('statusLabel');
@@ -349,26 +356,32 @@
         const homeBtn = document.getElementById('homeBtn');
 
         // ============================================================
-        //  ОТРИСОВКА
+        //  ОТРИСОВКА (только визуал, без изменения состояния)
         // ============================================================
         function render() {
             const leftCmVis = leftMm / 10;
             const rightCmVis = rightMm / 10;
-            const leftY = BASE_Y - leftCmVis * PX_PER_CM;
-            const rightY = BASE_Y - rightCmVis * PX_PER_CM;
+            let leftY = BASE_Y - leftCmVis * PX_PER_CM;
+            let rightY = BASE_Y - rightCmVis * PX_PER_CM;
+
+            leftY = Math.min(SVG_HEIGHT, Math.max(0, leftY));
+            rightY = Math.min(SVG_HEIGHT, Math.max(0, rightY));
 
             mainLine.setAttribute('y1', leftY);
             mainLine.setAttribute('y2', rightY);
             leftDot.setAttribute('cy', leftY);
             rightDot.setAttribute('cy', rightY);
 
-            leftDisplay.textContent = leftMm + ' мм';
-            rightDisplay.textContent = rightMm + ' мм';
+            leftSliderValue.textContent = leftMm + ' мм';
+            rightSliderValue.textContent = rightMm + ' мм';
 
-            leftPlus.disabled = leftMm >= MAX_MM || isMoving;
-            leftMinus.disabled = leftMm <= MIN_MM || isMoving;
-            rightPlus.disabled = rightMm >= MAX_MM || isMoving;
-            rightMinus.disabled = rightMm <= MIN_MM || isMoving;
+            // Синхронизируем ползунок с состоянием (если он не активен)
+            if (document.activeElement !== leftSlider) {
+                leftSlider.value = leftMm;
+            }
+            if (document.activeElement !== rightSlider) {
+                rightSlider.value = rightMm;
+            }
         }
 
         // ============================================================
@@ -410,7 +423,7 @@
         }
 
         // ============================================================
-        //  КАЛИБРОВКА (сброс координат на сервере в 0 без движения)
+        //  КАЛИБРОВКА
         // ============================================================
         async function doCalibrate() {
             setStatus('wait', 'Калибровка...');
@@ -430,7 +443,7 @@
         }
 
         // ============================================================
-        //  ВОЗВРАТ В ДОМ (физическое движение в 0)
+        //  ВОЗВРАТ В ДОМ
         // ============================================================
         async function doGoHome() {
             if (isMoving) return;
@@ -457,59 +470,14 @@
         }
 
         // ============================================================
-        //  ОТНОСИТЕЛЬНОЕ ДВИЖЕНИЕ
+        //  АБСОЛЮТНОЕ ПЕРЕМЕЩЕНИЕ
         // ============================================================
-        async function doMove(axis, amountCm) {
+        async function doMoveAbsolute(axis, target) {
             if (isMoving) return;
-            isMoving = true;
-            render();
-
-            try {
-                const result = await apiRequest('/move', 'POST', {
-                    axis: axis,
-                    amount: amountCm
-                });
-
-                if (result.success) {
-                    if (result.position) {
-                        if (axis === 'x') {
-                            leftMm = result.position.x;
-                        } else {
-                            rightMm = result.position.y;
-                        }
-                    }
-                    render();
-                    setStatus('ok', 'Движение выполнено');
-                } else {
-                    setStatus('err', result.error || 'Ошибка движения');
-                }
-            } catch (e) {
-                setStatus('err', 'Ошибка: ' + e.message);
-            }
-
-            isMoving = false;
-            render();
-        }
-
-        // ============================================================
-        //  АБСОЛЮТНОЕ ДВИЖЕНИЕ
-        // ============================================================
-        async function doMoveAbsolute(axis) {
-            if (isMoving) return;
-            let currentVal = (axis === 'x') ? leftMm : rightMm;
-            let input = prompt(`Введите положение для оси ${axis.toUpperCase()} в миллиметрах (0–${MAX_MM}):`, currentVal);
-            if (input === null) return;
-            let target = parseFloat(input);
-            if (isNaN(target)) {
-                alert('Введите число');
-                return;
-            }
-            if (target < MIN_MM || target > MAX_MM) {
-                alert(`Значение должно быть от ${MIN_MM} до ${MAX_MM} мм`);
-                return;
-            }
+            if (target < MIN_MM || target > MAX_MM) return;
 
             isMoving = true;
+            setStatus('wait', `Движение оси ${axis.toUpperCase()} к ${target} мм...`);
             render();
 
             try {
@@ -530,9 +498,22 @@
                     setStatus('ok', `Перемещено на ${target} мм`);
                 } else {
                     setStatus('err', result.error || 'Ошибка перемещения');
+                    // Возвращаем ползунок на предыдущее значение
+                    if (axis === 'x') {
+                        leftSlider.value = leftMm;
+                    } else {
+                        rightSlider.value = rightMm;
+                    }
+                    render();
                 }
             } catch (e) {
                 setStatus('err', 'Ошибка: ' + e.message);
+                if (axis === 'x') {
+                    leftSlider.value = leftMm;
+                } else {
+                    rightSlider.value = rightMm;
+                }
+                render();
             }
 
             isMoving = false;
@@ -540,7 +521,50 @@
         }
 
         // ============================================================
-        //  ПРОВЕРКА СЕРВЕРА
+        //  ОБРАБОТЧИКИ ПОЛЗУНКОВ
+        // ============================================================
+        // При движении ползунка обновляем только визуализацию (дисплей и линию),
+        // но НЕ меняем состояние leftMm/rightMm — оно изменится только после подтверждения сервером.
+        function onSliderInput(axis) {
+            const slider = axis === 'x' ? leftSlider : rightSlider;
+            const val = parseInt(slider.value, 10);
+            // Временно отображаем значение на дисплее, но состояние не меняем
+            if (axis === 'x') {
+                leftSliderValue.textContent = val + ' мм';
+            } else {
+                rightSliderValue.textContent = val + ' мм';
+            }
+            // Обновляем линию визуально по временному значению
+            const leftCmVis = (axis === 'x' ? val : leftMm) / 10;
+            const rightCmVis = (axis === 'y' ? val : rightMm) / 10;
+            let leftY = BASE_Y - leftCmVis * PX_PER_CM;
+            let rightY = BASE_Y - rightCmVis * PX_PER_CM;
+            leftY = Math.min(SVG_HEIGHT, Math.max(0, leftY));
+            rightY = Math.min(SVG_HEIGHT, Math.max(0, rightY));
+            mainLine.setAttribute('y1', leftY);
+            mainLine.setAttribute('y2', rightY);
+            leftDot.setAttribute('cy', leftY);
+            rightDot.setAttribute('cy', rightY);
+        }
+
+        // При отпускании ползунка отправляем команду на сервер
+        function onSliderChange(axis) {
+            const slider = axis === 'x' ? leftSlider : rightSlider;
+            const val = parseInt(slider.value, 10);
+            doMoveAbsolute(axis, val);
+        }
+
+        leftSlider.addEventListener('input', () => onSliderInput('x'));
+        leftSlider.addEventListener('change', () => onSliderChange('x'));
+
+        rightSlider.addEventListener('input', () => onSliderInput('y'));
+        rightSlider.addEventListener('change', () => onSliderChange('y'));
+
+        calibrateBtn.addEventListener('click', doCalibrate);
+        homeBtn.addEventListener('click', doGoHome);
+
+        // ============================================================
+        //  ПИНГ СЕРВЕРА
         // ============================================================
         async function pingServer() {
             try {
@@ -563,9 +587,6 @@
             }
         }
 
-        // ============================================================
-        //  ИНИЦИАЛИЗАЦИЯ
-        // ============================================================
         async function init() {
             await pingServer();
             if (statusDot.className.includes('err')) {
@@ -573,29 +594,12 @@
             }
         }
 
-        // ============================================================
-        //  ОБРАБОТЧИКИ
-        // ============================================================
-        leftPlus.addEventListener('click', () => doMove('x', +1));
-        leftMinus.addEventListener('click', () => doMove('x', -1));
-        rightPlus.addEventListener('click', () => doMove('y', +1));
-        rightMinus.addEventListener('click', () => doMove('y', -1));
-
-        leftDisplay.addEventListener('click', () => doMoveAbsolute('x'));
-        rightDisplay.addEventListener('click', () => doMoveAbsolute('y'));
-
-        calibrateBtn.addEventListener('click', doCalibrate);
-        homeBtn.addEventListener('click', doGoHome);
-
-        // ============================================================
-        //  СТАРТ
-        // ============================================================
         render();
         init();
 
         console.log('✅ Страница загружена. Сервер: ' + SERVER_URL);
         console.log('   Левая сторона → ось X, правая сторона → ось Y');
-        console.log('   Клик по дисплею → ввод абсолютной позиции в мм');
+        console.log('   Диапазон: от −50 до +50 мм, нуль по центру, с отступом от краёв');
     </script>
 </body>
 </html>

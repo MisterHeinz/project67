@@ -23,6 +23,7 @@ TIMEOUT = 2
 SPEED = 30.0
 ACCEL = 50.0
 DECEL = 50.0
+MIN_STROKE_MM = -50
 MAX_STROKE_MM = 50
 
 # Глобальные переменные
@@ -69,7 +70,10 @@ def send_command(cmd):
     if emulation or ser is None:
         print(f"[EMU] -> {cmd}")
         time.sleep(0.05)
-        return True, f"RMRESULT_SUCCESSOX{current_x:.5f}OY{current_y:.5f}OZ0.00000OA0.00000"
+        # В эмуляции возвращаем фиктивный ответ с текущими координатами
+        response = f"RMRESULT_SUCCESSOX{current_x:.5f}OY{current_y:.5f}OZ0.00000OA0.00000"
+        print(f"[EMU] <- {response}")
+        return True, response
     
     try:
         ser.write((cmd + '\n').encode('utf-8'))
@@ -91,10 +95,10 @@ def parse_response(response):
         return float(ox_match.group(1)), float(oy_match.group(1))
     return None, None
 
-# ============================== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ОТНОСИТЕЛЬНОГО ДВИЖЕНИЯ ==============================
+# ============================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ОТНОСИТЕЛЬНОГО ДВИЖЕНИЯ ==============================
 def calc_relative_move(axis, current, amount_mm):
     """
-    Вычисляет фактическое смещение с учётом границ 0..MAX_STROKE_MM.
+    Вычисляет фактическое смещение с учётом границ MIN_STROKE_MM..MAX_STROKE_MM.
     Возвращает словарь с actual_mm, ox, oy, new_pos, либо None и сообщение об ошибке.
     """
     if axis == 'x':
@@ -105,7 +109,7 @@ def calc_relative_move(axis, current, amount_mm):
         return None, {"success": False, "error": "Неизвестная ось"}
 
     max_possible = MAX_STROKE_MM - current
-    min_possible = -current
+    min_possible = MIN_STROKE_MM - current
 
     if amount_mm > 0:
         actual_mm = min(amount_mm, max_possible)
@@ -117,8 +121,8 @@ def calc_relative_move(axis, current, amount_mm):
         return None, {"success": True, "position": {"x": current_x, "y": current_y}, "note": "already at limit"}
 
     new_pos = current + actual_mm
-    if new_pos < 0 or new_pos > MAX_STROKE_MM:
-        return None, {"success": False, "error": f"Выход за границы (0..{MAX_STROKE_MM} мм)"}
+    if new_pos < MIN_STROKE_MM or new_pos > MAX_STROKE_MM:
+        return None, {"success": False, "error": f"Выход за границы ({MIN_STROKE_MM}..{MAX_STROKE_MM} мм)"}
 
     return {
         'actual_mm': actual_mm,
@@ -131,21 +135,25 @@ def calc_relative_move(axis, current, amount_mm):
 def do_move(axis, amount_cm):
     global current_x, current_y
     amount_mm = amount_cm * 10  # 1 см = 10 мм
+    print(f"[SYS] do_move: axis={axis}, amount_cm={amount_cm}, amount_mm={amount_mm}")
 
     # Выбираем текущую позицию для оси
     current = current_x if axis == 'x' else current_y
 
     params, err = calc_relative_move(axis, current, amount_mm)
     if err is not None:
+        print(f"[SYS] Ошибка в calc_relative_move: {err}")
         return err
     if params is None:
         # если движения нет (уже на границе)
+        print("[SYS] Движение не требуется (уже на границе)")
         return {"success": True, "position": {"x": current_x, "y": current_y}, "note": "already at limit"}
 
     actual_mm = params['actual_mm']
     ox = params['ox']
     oy = params['oy']
     new_pos = params['new_pos']
+    print(f"[SYS] Вычисленное фактическое смещение: actual_mm={actual_mm}, ox={ox}, oy={oy}, new_pos={new_pos}")
 
     cmd = f"RMOX{ox:.1f}OY{oy:.1f}OZ0.0OA0.0SP{SPEED:.1f}AC{ACCEL:.1f}DC{DECEL:.1f}"
     ok, response = send_command(cmd)
@@ -170,15 +178,17 @@ def do_move(axis, amount_cm):
             else:
                 current_y = new_pos
             print("ERROR: Не удалось распарсить ответ, использую расчётную позицию")
-
+    print(f"[SYS] Текущие координаты после движения: X={current_x:.2f}, Y={current_y:.2f}")
     return {"success": True, "position": {"x": current_x, "y": current_y}}
 
 # ============================== АБСОЛЮТНОЕ ПЕРЕМЕЩЕНИЕ ==============================
 def do_move_absolute(axis, target_mm):
     global current_x, current_y
+    print(f"[SYS] do_move_absolute: axis={axis}, target_mm={target_mm}")
 
-    if target_mm < 0 or target_mm > MAX_STROKE_MM:
-        return {"success": False, "error": f"Цель вне границ (0..{MAX_STROKE_MM} мм)"}
+    if target_mm < MIN_STROKE_MM or target_mm > MAX_STROKE_MM:
+        print(f"[SYS] Цель вне границ ({MIN_STROKE_MM}..{MAX_STROKE_MM} мм)")
+        return {"success": False, "error": f"Цель вне границ ({MIN_STROKE_MM}..{MAX_STROKE_MM} мм)"}
 
     if axis == 'x':
         ox = target_mm
@@ -186,6 +196,7 @@ def do_move_absolute(axis, target_mm):
     else:  # axis == 'y'
         ox = current_x
         oy = target_mm
+    print(f"[SYS] Формируем команду AM: OX={ox}, OY={oy}")
 
     cmd = f"AMOX{ox:.1f}OY{oy:.1f}OZ0.0OA0.0SP{SPEED:.1f}AC{ACCEL:.1f}DC{DECEL:.1f}"
     ok, response = send_command(cmd)
@@ -209,18 +220,20 @@ def do_move_absolute(axis, target_mm):
             else:
                 current_y = oy
             print("ERROR: Не удалось распарсить ответ, использую заданные координаты")
-
+    print(f"[SYS] Текущие координаты после AM: X={current_x:.2f}, Y={current_y:.2f}")
     return {"success": True, "position": {"x": current_x, "y": current_y}}
 
+# ============================== ВОЗВРАЩЕНИЕ В 0 ==============================
 def do_go_home():
     global current_x, current_y
+    print("[SYS] do_go_home вызван")
     if current_x == 0.0 and current_y == 0.0:
         return {"success": True, "position": {"x": 0.0, "y": 0.0}}
 
-    # Вычисляем дельту для возврата в 0. 
-    # Если мы стоим в +20мм, то нужно передать -20мм, чтобы стать в 0.
+    # Вычисляем дельту для возврата в 0.
     ox_needed = -current_x
     oy_needed = -current_y
+    print(f"[SYS] Необходимые смещения: OX={ox_needed}, OY={oy_needed}")
 
     cmd = f"RMOX{ox_needed:.1f}OY{oy_needed:.1f}OZ0.0OA0.0SP{SPEED:.1f}AC{ACCEL:.1f}DC{DECEL:.1f}"
     ok, response = send_command(cmd)
@@ -238,11 +251,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=DIRECTORY, **kwargs)
 
     def log_message(self, format, *args):
-        print(f"[{self.log_date_time_string()}] {format % args}")
+        print(f"[HTTP] {format % args}")
 
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == '/ping':
+            print("[HTTP] GET /ping")
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
@@ -252,21 +266,19 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        
-        # 1. Сброс текущего положения в НОЛЬ
+        print(f"[HTTP] POST {parsed.path}")
+
         if parsed.path == '/calibrate':
             global current_x, current_y
             current_x = 0.0
             current_y = 0.0
             print("[SYS] Произведена калибровка: текущая позиция принята за 0.0")
-            
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
             return
 
-        # 2. Возврат в нулевую позицию
         elif parsed.path == '/go_home':
             result = do_go_home()
             status = 200 if result.get('success') else 400
@@ -276,7 +288,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(result).encode('utf-8'))
             return
 
-        # 3. Стандартное движение (уже существующий код)
         elif parsed.path == '/move':
             content_length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(content_length).decode('utf-8')
@@ -287,6 +298,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return
             axis = data.get('axis')
             amount = data.get('amount')
+            print(f"[HTTP] /move: axis={axis}, amount={amount}")
             if axis not in ('x', 'y') or amount not in (1, -1):
                 self.send_error(400, "Invalid parameters")
                 return
@@ -308,6 +320,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return
             axis = data.get('axis')
             target_mm = data.get('target_mm')
+            print(f"[HTTP] /move_abs: axis={axis}, target_mm={target_mm}")
             if axis not in ('x', 'y') or target_mm is None:
                 self.send_error(400, "Invalid parameters")
                 return
@@ -338,7 +351,7 @@ def main():
 
     with socketserver.TCPServer(("", PORT), Handler) as httpd:
         print("=" * 50)
-        print(f"  Сервер запущен на http://localhost:{PORT}")
+        print(f" Сервер запущен на http://localhost:{PORT}")
         print("  (Эмуляция — реальное оборудование не задействовано)")
         print("  Для остановки нажмите Ctrl+C")
         print("=" * 50)
