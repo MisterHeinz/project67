@@ -15,12 +15,12 @@ PORT = 8000
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
 # Порт микроконтроллера и время ожидания
-SERIAL_PORT = 'COM3'
+SERIAL_PORT = 'COM6'
 BAUDRATE = 115200
 TIMEOUT = 3  # таймаут для readline
 
 # Константы движения
-SPEED = 20.0
+SPEED = 66.7
 ACCEL = 20.0
 DECEL = 20.0
 MIN_STROKE_MM = -50
