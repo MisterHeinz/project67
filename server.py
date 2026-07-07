@@ -15,9 +15,9 @@ PORT = 8000
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
 # Порт микроконтроллера и время ожидания
-SERIAL_PORT = 'COM6' #/dev/ttyACM0``
+SERIAL_PORT = 'COM6'  # /dev/ttyACM0
 BAUDRATE = 115200
-TIMEOUT = 3
+TIMEOUT = 15
 
 # Константы движения
 SPEED = 66.7
@@ -29,8 +29,10 @@ MAX_STROKE_MM = 50
 # Глобальные переменные
 ser = None
 emulation = False
-current_x = 0.0
+current_x = 0.0      # реальное положение в системе координат контроллера
 current_y = 0.0
+display_x = 0.0      # отображаемое на сайте положение (в той же системе, но может иметь смещение)
+display_y = 0.0
 
 # Попытка импорта pyserial
 try:
@@ -114,7 +116,7 @@ def send_command(cmd):
         # Читаем до конца строки с таймаутом
         start_time = time.time()
         response = ""
-        while time.time() - start_time < 5.0:
+        while time.time() - start_time < 15.0:
             if ser.in_waiting > 0:
                 char = ser.read(1).decode('utf-8', errors='ignore')
                 response += char
@@ -138,7 +140,6 @@ def parse_coordinates(response):
     """Извлекает OX и OY из ответа с поддержкой отрицательных чисел."""
     if not response:
         return None, None
-    # Поддержка отрицательных чисел и пробелов
     ox_match = re.search(r'OX\s*(-?[\d.]+)', response)
     oy_match = re.search(r'OY\s*(-?[\d.]+)', response)
     if ox_match and oy_match:
@@ -148,7 +149,7 @@ def parse_coordinates(response):
 # ============================== КОМАНДЫ УПРАВЛЕНИЯ ==============================
 def do_read_home():
     """Читает координаты домашнего положения (HR)."""
-    global current_x, current_y
+    global current_x, current_y, display_x, display_y
     print("[SYS] Чтение домашних координат: отправка HR...")
     ok, response = send_command("HR")
     if not ok:
@@ -159,15 +160,17 @@ def do_read_home():
     if x is not None and y is not None:
         current_x = x
         current_y = y
+        display_x = 0.0  # при старте сайт показывает 0
+        display_y = 0.0
         print(f"[SYS] Домашние координаты: X={current_x:.2f}, Y={current_y:.2f}")
-        return {"success": True, "position": {"x": current_x, "y": current_y}}
+        return {"success": True, "position": {"x": display_x, "y": display_y}}
     else:
         print("[SYS] Не удалось распарсить HR")
         return {"success": False}
 
 def do_go_home():
     """Перемещение в домашнее положение (MH)."""
-    global current_x, current_y
+    global current_x, current_y, display_x, display_y
     print("[SYS] Перемещение в домашнее положение: отправка MH...")
     cmd = f"MHSP{SPEED:.1f}AC{ACCEL:.1f}DC{DECEL:.1f}"
     ok, response = send_command(cmd)
@@ -178,51 +181,62 @@ def do_go_home():
     if x is not None and y is not None:
         current_x = x
         current_y = y
+        display_x = 0.0
+        display_y = 0.0
         print(f"[SYS] MH выполнено. Координаты: X={current_x:.2f}, Y={current_y:.2f}")
     else:
         # Если ответ не получен, считаем что дом = 0
         current_x = 0.0
         current_y = 0.0
+        display_x = 0.0
+        display_y = 0.0
         print("[SYS] Не удалось распарсить MH, установлены 0,0")
-    return {"success": True, "position": {"x": current_x, "y": current_y}}
+    return {"success": True, "position": {"x": display_x, "y": display_y}}
 
 def do_calibrate():
-    """Калибровка: HW с текущими координатами."""
-    global current_x, current_y
+    """Калибровка: HW с текущими реальными координатами, затем обнуление отображения."""
+    global current_x, current_y, display_x, display_y
     print(f"[SYS] Калибровка: HW OX{current_x:.1f} OY{current_y:.1f}...")
     cmd = f"HW OX{current_x:.1f} OY{current_y:.1f}"
     ok, response = send_command(cmd)
     if not ok:
         return {"success": False, "error": "Ошибка отправки HW"}
-    # Координаты сервера не меняем
-    print("[SYS] Калибровка выполнена.")
-    return {"success": True, "position": {"x": current_x, "y": current_y}}
+
+    # После калибровки отображение обнуляется, реальные координаты остаются прежними
+    display_x = 0.0
+    display_y = 0.0
+    print("[SYS] Калибровка выполнена. Отображение сброшено в 0.")
+    return {"success": True, "position": {"x": display_x, "y": display_y}}
 
 def do_move_absolute(axis, target_mm):
-    """Абсолютное перемещение через RM."""
-    global current_x, current_y
-    print(f"[SYS] do_move_absolute: axis={axis}, target_mm={target_mm}")
+    """Абсолютное перемещение через RM с учётом смещения display/current."""
+    global current_x, current_y, display_x, display_y
+    print(f"[SYS] do_move_absolute: axis={axis}, target_mm={target_mm} (display)")
 
     if target_mm < MIN_STROKE_MM or target_mm > MAX_STROKE_MM:
         return {"success": False, "error": f"Цель вне границ ({MIN_STROKE_MM}..{MAX_STROKE_MM} мм)"}
 
+    # Вычисляем дельту в системе отображения
     if axis == 'x':
-        delta = target_mm - current_x
-        new_pos = current_x + delta
-        if new_pos < MIN_STROKE_MM or new_pos > MAX_STROKE_MM:
+        delta_display = target_mm - display_x
+        new_display = target_mm
+        # реальное положение изменится на ту же дельту
+        new_current = current_x + delta_display
+        if new_current < MIN_STROKE_MM or new_current > MAX_STROKE_MM:
             return {"success": False, "error": f"Выход за границы ({MIN_STROKE_MM}..{MAX_STROKE_MM} мм)"}
-        ox = delta
+        ox = delta_display
         oy = 0.0
     else:
-        delta = target_mm - current_y
-        new_pos = current_y + delta
-        if new_pos < MIN_STROKE_MM or new_pos > MAX_STROKE_MM:
+        delta_display = target_mm - display_y
+        new_display = target_mm
+        new_current = current_y + delta_display
+        if new_current < MIN_STROKE_MM or new_current > MAX_STROKE_MM:
             return {"success": False, "error": f"Выход за границы ({MIN_STROKE_MM}..{MAX_STROKE_MM} мм)"}
         ox = 0.0
-        oy = delta
+        oy = delta_display
 
-    if abs(delta) < 0.01:
-        return {"success": True, "position": {"x": current_x, "y": current_y}, "note": "already at position"}
+    if abs(delta_display) < 0.01:
+        return {"success": True, "position": {"x": display_x, "y": display_y}, "note": "already at position"}
 
     cmd = f"RMOX{ox:.1f}OY{oy:.1f}OZ0.0OA0.0SP{SPEED:.1f}AC{ACCEL:.1f}DC{DECEL:.1f}"
     ok, response = send_command(cmd)
@@ -233,10 +247,20 @@ def do_move_absolute(axis, target_mm):
     if x is not None and y is not None:
         current_x = x
         current_y = y
-        print(f"[SYS] RM выполнено. Координаты: X={current_x:.2f}, Y={current_y:.2f}")
+        # Отображение обновляем до target
+        display_x = new_display if axis == 'x' else display_x
+        display_y = new_display if axis == 'y' else display_y
+        print(f"[SYS] RM выполнено. Реальные: X={current_x:.2f}, Y={current_y:.2f}. Отображение: X={display_x:.2f}, Y={display_y:.2f}")
     else:
-        print("[SYS] Не удалось распарсить RM, координаты не изменены.")
-    return {"success": True, "position": {"x": current_x, "y": current_y}}
+        # fallback: используем расчётные
+        if axis == 'x':
+            current_x = new_current
+            display_x = new_display
+        else:
+            current_y = new_current
+            display_y = new_display
+        print(f"[SYS] Не удалось распарсить RM, используем расчётные.")
+    return {"success": True, "position": {"x": display_x, "y": display_y}}
 
 # ============================== ОБРАБОТКА HTTP ==============================
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -269,6 +293,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(result).encode('utf-8'))
             return
 
+        elif parsed.path == '/read_home':
+            result = do_read_home()
+            status = 200 if result.get('success') else 400
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode('utf-8'))
+            return
+
         elif parsed.path == '/go_home':
             result = do_go_home()
             status = 200 if result.get('success') else 400
@@ -292,8 +325,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(400, "Invalid parameters")
                 return
             amount_mm = amount * 10
-            current = current_x if axis == 'x' else current_y
-            target = current + amount_mm
+            current_display = display_x if axis == 'x' else display_y
+            target = current_display + amount_mm
             result = do_move_absolute(axis, target)
             status = 200 if result.get('success') else 400
             self.send_response(status)

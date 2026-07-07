@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Регулируемая линия</title>
+    <title>Регулировка положения платформы</title>
     <style>
         * {
             margin: 0;
@@ -266,7 +266,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Регулируемая линия — установите края ползунками</h1>
+        <h1>Регулировка платформы — установите положение ползунками</h1>
 
         <div class="main">
             <!-- Левая колонка (ось X) -->
@@ -389,8 +389,9 @@
             leftDot.setAttribute('cy', leftY);
             rightDot.setAttribute('cy', rightY);
 
-            leftSliderValue.textContent = leftMm + ' мм';
-            rightSliderValue.textContent = rightMm + ' мм';
+            // Отображаем целые числа без десятичных знаков
+            leftSliderValue.textContent = Math.round(leftMm) + ' мм';
+            rightSliderValue.textContent = Math.round(rightMm) + ' мм';
 
             if (document.activeElement !== leftSlider) {
                 leftSlider.value = leftMm;
@@ -587,16 +588,20 @@
             } else {
                 rightSliderValue.textContent = val + ' мм';
             }
-            const leftCmVis = (axis === 'x' ? val : leftMm) / 10;
-            const rightCmVis = (axis === 'y' ? val : rightMm) / 10;
-            let leftY = BASE_Y - leftCmVis * PX_PER_CM;
-            let rightY = BASE_Y - rightCmVis * PX_PER_CM;
-            leftY = Math.min(SVG_HEIGHT, Math.max(0, leftY));
-            rightY = Math.min(SVG_HEIGHT, Math.max(0, rightY));
-            mainLine.setAttribute('y1', leftY);
-            mainLine.setAttribute('y2', rightY);
-            leftDot.setAttribute('cy', leftY);
-            rightDot.setAttribute('cy', rightY);
+
+            // Если движение уже выполняется, не обновляем линию, чтобы избежать дёрганий
+            if (!isMoving) {
+                const leftCmVis = (axis === 'x' ? val : leftMm) / 10;
+                const rightCmVis = (axis === 'y' ? val : rightMm) / 10;
+                let leftY = BASE_Y - leftCmVis * PX_PER_CM;
+                let rightY = BASE_Y - rightCmVis * PX_PER_CM;
+                leftY = Math.min(SVG_HEIGHT, Math.max(0, leftY));
+                rightY = Math.min(SVG_HEIGHT, Math.max(0, rightY));
+                mainLine.setAttribute('y1', leftY);
+                mainLine.setAttribute('y2', rightY);
+                leftDot.setAttribute('cy', leftY);
+                rightDot.setAttribute('cy', rightY);
+            }
         }
 
         function onSliderChange(axis) {
@@ -641,7 +646,6 @@
         async function init() {
             const ok = await pingServer();
             if (ok) {
-                // При открытии страницы: сначала читаем дом (HR), затем возвращаемся домой (MH)
                 await doReadHome();
                 await doGoHome();
             } else {
