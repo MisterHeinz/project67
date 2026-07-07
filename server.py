@@ -15,9 +15,9 @@ PORT = 8000
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
 # Порт микроконтроллера и время ожидания
-SERIAL_PORT = 'COM6'
+SERIAL_PORT = 'COM6' # for linux: /dev/ttyACM0
 BAUDRATE = 115200
-TIMEOUT = 3  # таймаут для readline
+TIMEOUT = 3
 
 # Константы движения
 SPEED = 66.7
@@ -69,7 +69,6 @@ def close_serial():
 def send_command(cmd):
     """
     Отправляет команду и читает ответ, возвращает (success, response).
-    В цикле ожидает ответ, пока не получит непустую строку или не истечёт таймаут.
     """
     if emulation or ser is None:
         print(f"[EMU] -> {cmd}")
@@ -78,7 +77,6 @@ def send_command(cmd):
         if cmd.startswith('HR'):
             response = f"HROK OX{current_x:.5f} OY{current_y:.5f}"
         elif cmd.startswith('HW'):
-            # Извлекаем параметры OX и OY из команды
             ox_match = re.search(r'OX([\d.]+)', cmd)
             oy_match = re.search(r'OY([\d.]+)', cmd)
             if ox_match and oy_match:
@@ -89,10 +87,8 @@ def send_command(cmd):
                 oy = current_y
             response = f"HWOK OX{ox:.5f} OY{oy:.5f}"
         elif cmd.startswith('MH'):
-            # В эмуляции считаем, что дом = 0
             response = f"MHOK OX0.00000 OY0.00000"
         elif cmd.startswith('RM'):
-            # RM — относительное движение, извлекаем OX и OY из команды
             ox_match = re.search(r'OX([\d.]+)', cmd)
             oy_match = re.search(r'OY([\d.]+)', cmd)
             if ox_match:
@@ -101,7 +97,6 @@ def send_command(cmd):
             if oy_match:
                 oy = float(oy_match.group(1))
                 current_y += oy
-            # Ограничиваем координаты
             current_x = max(MIN_STROKE_MM, min(MAX_STROKE_MM, current_x))
             current_y = max(MIN_STROKE_MM, min(MAX_STROKE_MM, current_y))
             response = f"RMRESULT_SUCCESSOX{current_x:.5f}OY{current_y:.5f}OZ0.00000OA0.00000"
@@ -110,43 +105,37 @@ def send_command(cmd):
         print(f"[EMU] <- {response}")
         return True, response
 
-    # Реальный режим
     try:
         ser.reset_input_buffer()
         ser.write((cmd + '\n').encode('utf-8'))
         ser.flush()
         print(f"[SER] -> {cmd}")
 
-        # Цикл ожидания ответа с таймаутом
+        # Читаем до конца строки с таймаутом
         start_time = time.time()
         response = ""
-        while time.time() - start_time < 5.0:  # максимум 5 секунд ждём
+        while time.time() - start_time < 5.0:
             if ser.in_waiting > 0:
-                response = ser.readline().decode('utf-8').strip()
-                if response:
+                char = ser.read(1).decode('utf-8', errors='ignore')
+                response += char
+                if char == '\n' or char == '\r':
                     break
             else:
-                time.sleep(0.05)  # небольшая пауза, чтобы не грузить процессор
+                time.sleep(0.02)
 
+        response = response.strip()
         if response:
             print(f"[SER] <- {response}")
+            return True, response
         else:
             print("[SER] Таймаут: ответ не получен")
-            # Принудительно сбрасываем буфер и возвращаем ошибку
-            ser.reset_input_buffer()
             return False, None
-
-        return True, response
     except Exception as e:
         print(f"ERROR: Ошибка при обмене: {e}")
-        try:
-            ser.reset_input_buffer()
-        except:
-            pass
         return False, None
 
 def parse_coordinates(response):
-    """Извлекает OX и OY из ответа (HROK, HWOK, MHOK, RMRESULT_SUCCESS)."""
+    """Извлекает OX и OY из ответа."""
     if not response:
         return None, None
     ox_match = re.search(r'OX([\d.]+)', response)
@@ -157,49 +146,26 @@ def parse_coordinates(response):
 
 # ============================== КОМАНДЫ УПРАВЛЕНИЯ ==============================
 def do_read_home():
-    """
-    Читает текущие координаты домашнего положения (команда HR).
-    Обновляет current_x и current_y из ответа контроллера.
-    """
+    """Читает координаты домашнего положения (HR)."""
     global current_x, current_y
     print("[SYS] Чтение домашних координат: отправка HR...")
-    cmd = "HR"
-    ok, response = send_command(cmd)
+    ok, response = send_command("HR")
     if not ok:
-        print("[SYS] Ошибка отправки HR, координаты остаются по умолчанию")
-        return {"success": False, "error": "Ошибка отправки HR"}
+        print("[SYS] Ошибка отправки HR")
+        return {"success": False}
 
     x, y = parse_coordinates(response)
     if x is not None and y is not None:
         current_x = x
         current_y = y
-        print(f"[SYS] Домашние координаты прочитаны: X={current_x:.2f}, Y={current_y:.2f}")
+        print(f"[SYS] Домашние координаты: X={current_x:.2f}, Y={current_y:.2f}")
         return {"success": True, "position": {"x": current_x, "y": current_y}}
     else:
-        print("[SYS] Не удалось распарсить ответ HR, координаты остаются по умолчанию")
-        return {"success": False, "error": "Ошибка парсинга HR"}
-
-def do_calibrate():
-    """
-    Калибровка: отправляет HW с текущими координатами, чтобы записать их как домашнее положение.
-    Координаты сервера НЕ МЕНЯЕМ.
-    """
-    global current_x, current_y
-    print(f"[SYS] Калибровка: отправка HW с координатами OX{current_x:.1f} OY{current_y:.1f}...")
-    cmd = f"HW OX{current_x:.1f} OY{current_y:.1f}"
-    ok, response = send_command(cmd)
-    if not ok:
-        return {"success": False, "error": "Ошибка отправки HW"}
-
-    # Координаты сервера остаются прежними, т.к. физическое положение не изменилось
-    print("[SYS] Калибровка выполнена. Координаты сервера не изменились.")
-    return {"success": True, "position": {"x": current_x, "y": current_y}}
+        print("[SYS] Не удалось распарсить HR")
+        return {"success": False}
 
 def do_go_home():
-    """
-    Перемещение в домашнее положение: отправляет MH.
-    После выполнения обновляет координаты сервера из ответа MHOK.
-    """
+    """Перемещение в домашнее положение (MH)."""
     global current_x, current_y
     print("[SYS] Перемещение в домашнее положение: отправка MH...")
     cmd = f"MHSP{SPEED:.1f}AC{ACCEL:.1f}DC{DECEL:.1f}"
@@ -211,21 +177,32 @@ def do_go_home():
     if x is not None and y is not None:
         current_x = x
         current_y = y
-        print(f"[SYS] Перемещение домой завершено. Координаты сервера: X={current_x:.2f}, Y={current_y:.2f}")
+        print(f"[SYS] MH выполнено. Координаты: X={current_x:.2f}, Y={current_y:.2f}")
     else:
-        print("[SYS] Не удалось распарсить ответ MH, координаты сервера не изменены.")
+        # Если ответ не получен, считаем что дом = 0
+        current_x = 0.0
+        current_y = 0.0
+        print("[SYS] Не удалось распарсить MH, установлены 0,0")
+    return {"success": True, "position": {"x": current_x, "y": current_y}}
+
+def do_calibrate():
+    """Калибровка: HW с текущими координатами."""
+    global current_x, current_y
+    print(f"[SYS] Калибровка: HW OX{current_x:.1f} OY{current_y:.1f}...")
+    cmd = f"HW OX{current_x:.1f} OY{current_y:.1f}"
+    ok, response = send_command(cmd)
+    if not ok:
+        return {"success": False, "error": "Ошибка отправки HW"}
+    # Координаты сервера не меняем
+    print("[SYS] Калибровка выполнена.")
     return {"success": True, "position": {"x": current_x, "y": current_y}}
 
 def do_move_absolute(axis, target_mm):
-    """
-    Абсолютное перемещение через относительное движение.
-    Вычисляет дельту (target - current) и отправляет RM.
-    """
+    """Абсолютное перемещение через RM."""
     global current_x, current_y
     print(f"[SYS] do_move_absolute: axis={axis}, target_mm={target_mm}")
 
     if target_mm < MIN_STROKE_MM or target_mm > MAX_STROKE_MM:
-        print(f"[SYS] Цель вне границ ({MIN_STROKE_MM}..{MAX_STROKE_MM} мм)")
         return {"success": False, "error": f"Цель вне границ ({MIN_STROKE_MM}..{MAX_STROKE_MM} мм)"}
 
     if axis == 'x':
@@ -243,8 +220,6 @@ def do_move_absolute(axis, target_mm):
         ox = 0.0
         oy = delta
 
-    print(f"[SYS] Относительное смещение: delta={delta}, ox={ox}, oy={oy}")
-
     if abs(delta) < 0.01:
         return {"success": True, "position": {"x": current_x, "y": current_y}, "note": "already at position"}
 
@@ -257,9 +232,9 @@ def do_move_absolute(axis, target_mm):
     if x is not None and y is not None:
         current_x = x
         current_y = y
-        print(f"[SYS] Текущие координаты после RM: X={current_x:.2f}, Y={current_y:.2f}")
+        print(f"[SYS] RM выполнено. Координаты: X={current_x:.2f}, Y={current_y:.2f}")
     else:
-        print("[SYS] Не удалось распарсить ответ RM, координаты сервера не изменены.")
+        print("[SYS] Не удалось распарсить RM, координаты не изменены.")
     return {"success": True, "position": {"x": current_x, "y": current_y}}
 
 # ============================== ОБРАБОТКА HTTP ==============================
@@ -273,7 +248,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == '/ping':
-            print("[HTTP] GET /ping")
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
@@ -313,7 +287,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return
             axis = data.get('axis')
             amount = data.get('amount')
-            print(f"[HTTP] /move: axis={axis}, amount={amount}")
             if axis not in ('x', 'y') or amount not in (1, -1):
                 self.send_error(400, "Invalid parameters")
                 return
@@ -338,11 +311,19 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return
             axis = data.get('axis')
             target_mm = data.get('target_mm')
-            print(f"[HTTP] /move_abs: axis={axis}, target_mm={target_mm}")
             if axis not in ('x', 'y') or target_mm is None:
                 self.send_error(400, "Invalid parameters")
                 return
             result = do_move_absolute(axis, float(target_mm))
+            status = 200 if result.get('success') else 400
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode('utf-8'))
+            return
+        
+        elif parsed.path == '/read_home':
+            result = do_read_home()
             status = 200 if result.get('success') else 400
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')
@@ -366,14 +347,8 @@ def start_serial():
 
 def main():
     start_serial()
-    # Читаем текущие координаты домашнего положения (HR)
-    print("[SYS] Чтение домашних координат (HR)...")
-    result = do_read_home()
-    if result.get('success'):
-        print("[SYS] Домашние координаты успешно получены")
-    else:
-        print("[SYS] Не удалось прочитать домашние координаты, используем 0,0")
 
+    # Запускаем HTTP-сервер
     with socketserver.TCPServer(("", PORT), Handler) as httpd:
         print("=" * 50)
         print(f" Сервер запущен на http://localhost:{PORT}")

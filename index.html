@@ -449,9 +449,6 @@
                     if (result.position) {
                         leftMm = result.position.x;
                         rightMm = result.position.y;
-                    } else {
-                        leftMm = 0;
-                        rightMm = 0;
                     }
                     render();
                     setStatus('ok', 'Калибровка выполнена (HW)');
@@ -460,6 +457,31 @@
                 }
             } catch (e) {
                 setStatus('err', 'Ошибка: ' + e.message);
+            }
+        }
+
+        // ============================================================
+        //  ЧТЕНИЕ ДОМА (HR)
+        // ============================================================
+        async function doReadHome() {
+            setStatus('wait', 'Чтение домашних координат (HR)...');
+            try {
+                const result = await apiRequest('/read_home', 'POST');
+                if (result.success) {
+                    if (result.position) {
+                        leftMm = result.position.x;
+                        rightMm = result.position.y;
+                    }
+                    render();
+                    setStatus('ok', 'Домашние координаты прочитаны');
+                    return true;
+                } else {
+                    setStatus('err', result.error || 'Ошибка чтения HR');
+                    return false;
+                }
+            } catch (e) {
+                setStatus('err', 'Ошибка: ' + e.message);
+                return false;
             }
         }
 
@@ -481,9 +503,6 @@
                     if (result.position) {
                         leftMm = result.position.x;
                         rightMm = result.position.y;
-                    } else {
-                        leftMm = 0;
-                        rightMm = 0;
                     }
                     render();
                     setStatus('ok', 'Станок вернулся в дом (MH)');
@@ -622,8 +641,9 @@
         async function init() {
             const ok = await pingServer();
             if (ok) {
-                // При запуске выполняем калибровку (HW)
-                await doCalibrate();
+                // При открытии страницы: сначала читаем дом (HR), затем возвращаемся домой (MH)
+                await doReadHome();
+                await doGoHome();
             } else {
                 setTimeout(init, 5000);
             }
