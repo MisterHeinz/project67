@@ -247,6 +247,21 @@
             background: #28a745;
             color: white;
         }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+        .sync-indicator {
+            animation: pulse 1.5s ease-in-out infinite;
+            font-weight: 600;
+            color: #ffc107;
+        }
+        .sync-indicator.done {
+            animation: none;
+            color: #28a745;
+        }
     </style>
 </head>
 <body>
@@ -306,6 +321,7 @@
             <span class="status-dot wait" id="statusDot"></span>
             <span class="status-label" id="statusLabel">Соединение...</span>
             <span class="status-msg" id="statusMsg">ожидание сервера</span>
+            <span class="status-msg sync-indicator" id="syncIndicator" style="display:none;">Синхронизация...</span>
             <button class="calib-btn" id="calibrateBtn">⟳ Калибровка</button>
             <button class="calib-btn home" id="homeBtn">В ноль (0)</button>
         </div>
@@ -352,6 +368,7 @@
         const statusDot = document.getElementById('statusDot');
         const statusLabel = document.getElementById('statusLabel');
         const statusMsg = document.getElementById('statusMsg');
+        const syncIndicator = document.getElementById('syncIndicator');
         const calibrateBtn = document.getElementById('calibrateBtn');
         const homeBtn = document.getElementById('homeBtn');
 
@@ -375,7 +392,6 @@
             leftSliderValue.textContent = leftMm + ' мм';
             rightSliderValue.textContent = rightMm + ' мм';
 
-            // Синхронизируем ползунок с состоянием (если он не активен)
             if (document.activeElement !== leftSlider) {
                 leftSlider.value = leftMm;
             }
@@ -423,17 +439,22 @@
         }
 
         // ============================================================
-        //  КАЛИБРОВКА
+        //  КАЛИБРОВКА (HW)
         // ============================================================
         async function doCalibrate() {
-            setStatus('wait', 'Калибровка...');
+            setStatus('wait', 'Калибровка (HW)...');
             try {
                 const result = await apiRequest('/calibrate', 'POST');
                 if (result.success) {
-                    leftMm = 0;
-                    rightMm = 0;
+                    if (result.position) {
+                        leftMm = result.position.x;
+                        rightMm = result.position.y;
+                    } else {
+                        leftMm = 0;
+                        rightMm = 0;
+                    }
                     render();
-                    setStatus('ok', 'Координаты сброшены в 0 (без движения)');
+                    setStatus('ok', 'Калибровка выполнена (HW)');
                 } else {
                     setStatus('err', result.error || 'Ошибка калибровки');
                 }
@@ -443,26 +464,43 @@
         }
 
         // ============================================================
-        //  ВОЗВРАТ В ДОМ
+        //  ВОЗВРАТ В ДОМ (MH)
         // ============================================================
         async function doGoHome() {
             if (isMoving) return;
-            setStatus('wait', 'Возврат в нулевую позицию...');
+            setStatus('wait', 'Перемещение домой (MH)...');
+            syncIndicator.style.display = 'inline';
+            syncIndicator.textContent = 'Выполняется MH...';
+            syncIndicator.className = 'status-msg sync-indicator';
             isMoving = true;
             render();
 
             try {
                 const result = await apiRequest('/go_home', 'POST');
                 if (result.success) {
-                    leftMm = 0;
-                    rightMm = 0;
+                    if (result.position) {
+                        leftMm = result.position.x;
+                        rightMm = result.position.y;
+                    } else {
+                        leftMm = 0;
+                        rightMm = 0;
+                    }
                     render();
-                    setStatus('ok', 'Станок вернулся в 0');
+                    setStatus('ok', 'Станок вернулся в дом (MH)');
+                    syncIndicator.textContent = 'MH выполнен ✓';
+                    syncIndicator.className = 'status-msg sync-indicator done';
+                    setTimeout(() => {
+                        syncIndicator.style.display = 'none';
+                    }, 3000);
                 } else {
-                    setStatus('err', result.error || 'Ошибка при возврате домой');
+                    setStatus('err', result.error || 'Ошибка MH');
+                    syncIndicator.textContent = 'Ошибка MH';
+                    syncIndicator.className = 'status-msg sync-indicator';
                 }
             } catch (e) {
                 setStatus('err', 'Ошибка: ' + e.message);
+                syncIndicator.textContent = 'Ошибка MH';
+                syncIndicator.className = 'status-msg sync-indicator';
             }
 
             isMoving = false;
@@ -470,7 +508,7 @@
         }
 
         // ============================================================
-        //  АБСОЛЮТНОЕ ПЕРЕМЕЩЕНИЕ
+        //  АБСОЛЮТНОЕ ПЕРЕМЕЩЕНИЕ (через RM)
         // ============================================================
         async function doMoveAbsolute(axis, target) {
             if (isMoving) return;
@@ -498,7 +536,6 @@
                     setStatus('ok', `Перемещено на ${target} мм`);
                 } else {
                     setStatus('err', result.error || 'Ошибка перемещения');
-                    // Возвращаем ползунок на предыдущее значение
                     if (axis === 'x') {
                         leftSlider.value = leftMm;
                     } else {
@@ -523,18 +560,14 @@
         // ============================================================
         //  ОБРАБОТЧИКИ ПОЛЗУНКОВ
         // ============================================================
-        // При движении ползунка обновляем только визуализацию (дисплей и линию),
-        // но НЕ меняем состояние leftMm/rightMm — оно изменится только после подтверждения сервером.
         function onSliderInput(axis) {
             const slider = axis === 'x' ? leftSlider : rightSlider;
             const val = parseInt(slider.value, 10);
-            // Временно отображаем значение на дисплее, но состояние не меняем
             if (axis === 'x') {
                 leftSliderValue.textContent = val + ' мм';
             } else {
                 rightSliderValue.textContent = val + ' мм';
             }
-            // Обновляем линию визуально по временному значению
             const leftCmVis = (axis === 'x' ? val : leftMm) / 10;
             const rightCmVis = (axis === 'y' ? val : rightMm) / 10;
             let leftY = BASE_Y - leftCmVis * PX_PER_CM;
@@ -547,7 +580,6 @@
             rightDot.setAttribute('cy', rightY);
         }
 
-        // При отпускании ползунка отправляем команду на сервер
         function onSliderChange(axis) {
             const slider = axis === 'x' ? leftSlider : rightSlider;
             const val = parseInt(slider.value, 10);
@@ -564,7 +596,7 @@
         homeBtn.addEventListener('click', doGoHome);
 
         // ============================================================
-        //  ПИНГ СЕРВЕРА
+        //  ПИНГ СЕРВЕРА И ИНИЦИАЛИЗАЦИЯ
         // ============================================================
         async function pingServer() {
             try {
@@ -588,8 +620,11 @@
         }
 
         async function init() {
-            await pingServer();
-            if (statusDot.className.includes('err')) {
+            const ok = await pingServer();
+            if (ok) {
+                // При запуске выполняем калибровку (HW)
+                await doCalibrate();
+            } else {
                 setTimeout(init, 5000);
             }
         }
@@ -599,7 +634,7 @@
 
         console.log('✅ Страница загружена. Сервер: ' + SERVER_URL);
         console.log('   Левая сторона → ось X, правая сторона → ось Y');
-        console.log('   Диапазон: от −50 до +50 мм, нуль по центру, с отступом от краёв');
+        console.log('   Используются команды: HW (калибровка), MH (домой), RM (относительное движение)');
     </script>
 </body>
 </html>
