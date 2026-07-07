@@ -15,7 +15,7 @@ PORT = 8000
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
 # Порт микроконтроллера и время ожидания
-SERIAL_PORT = 'COM6' # for linux: /dev/ttyACM0
+SERIAL_PORT = 'COM6' #/dev/ttyACM0``
 BAUDRATE = 115200
 TIMEOUT = 3
 
@@ -89,8 +89,8 @@ def send_command(cmd):
         elif cmd.startswith('MH'):
             response = f"MHOK OX0.00000 OY0.00000"
         elif cmd.startswith('RM'):
-            ox_match = re.search(r'OX([\d.]+)', cmd)
-            oy_match = re.search(r'OY([\d.]+)', cmd)
+            ox_match = re.search(r'OX(-?[\d.]+)', cmd)
+            oy_match = re.search(r'OY(-?[\d.]+)', cmd)
             if ox_match:
                 ox = float(ox_match.group(1))
                 current_x += ox
@@ -135,11 +135,12 @@ def send_command(cmd):
         return False, None
 
 def parse_coordinates(response):
-    """Извлекает OX и OY из ответа."""
+    """Извлекает OX и OY из ответа с поддержкой отрицательных чисел."""
     if not response:
         return None, None
-    ox_match = re.search(r'OX([\d.]+)', response)
-    oy_match = re.search(r'OY([\d.]+)', response)
+    # Поддержка отрицательных чисел и пробелов
+    ox_match = re.search(r'OX\s*(-?[\d.]+)', response)
+    oy_match = re.search(r'OY\s*(-?[\d.]+)', response)
     if ox_match and oy_match:
         return float(ox_match.group(1)), float(oy_match.group(1))
     return None, None
@@ -321,15 +322,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(result).encode('utf-8'))
             return
-        
-        elif parsed.path == '/read_home':
-            result = do_read_home()
-            status = 200 if result.get('success') else 400
-            self.send_response(status)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(result).encode('utf-8'))
-            return
 
         else:
             self.send_error(404, "Not found")
@@ -347,8 +339,6 @@ def start_serial():
 
 def main():
     start_serial()
-
-    # Запускаем HTTP-сервер
     with socketserver.TCPServer(("", PORT), Handler) as httpd:
         print("=" * 50)
         print(f" Сервер запущен на http://localhost:{PORT}")
