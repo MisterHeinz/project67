@@ -800,7 +800,7 @@ void handleCalibrateAll(String command)
 		speed = 30.0F;
 
 	calibrationRoughSpeed = MAX_SPEED * speed / 100.0F;
-	calibration = 0;
+	calibration = 4;
 
 	calibratePhase1();
 }
