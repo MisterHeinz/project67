@@ -1,0 +1,7 @@
+{
+    "sketch": "portal_teensy_firmware_v2.0_stand.ino",
+    "configuration": "usb=serial,speed=600,opt=o2std,keys=en-us",
+    "board": "teensy:avr:teensy41",
+    "port": "/dev/tty.usbmodem030701000000011",
+    "output": "/Users/andrei/ArduinoProjects/portal_teensy_firmware/build"
+}

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Регулируемая линия</title>
+    <title>Регулировка положения платформы</title>
     <style>
         * {
             margin: 0;
@@ -266,7 +266,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Регулируемая линия — установите края ползунками</h1>
+        <h1>Регулировка платформы — установите положение ползунками</h1>
 
         <div class="main">
             <!-- Левая колонка (ось X) -->
@@ -281,7 +281,7 @@
                     <rect x="8" y="46" width="4" height="6" fill="#1a1a1a"/>
                 </svg>
                 <div class="slider-wrapper">
-                    <input type="range" id="leftSlider" min="-50" max="50" value="0" step="1" />
+                    <input type="range" id="leftSlider" min="0" max="50" value="0" step="1" />
                     <span class="zero-marker">0</span>
                 </div>
                 <span class="slider-value" id="leftSliderValue">0 мм</span>
@@ -290,10 +290,10 @@
             <!-- Линия (SVG) -->
             <div class="line-area">
                 <svg class="line-svg" id="svg" viewBox="0 0 600 300" preserveAspectRatio="none">
-                    <line x1="30" y1="150" x2="570" y2="150" stroke="#bbb" stroke-width="1" stroke-dasharray="6 6" />
-                    <line class="line" id="mainLine" x1="30" y1="150" x2="570" y2="150" />
-                    <circle class="endpoint" id="leftDot" cx="30" cy="150" r="8" />
-                    <circle class="endpoint" id="rightDot" cx="570" cy="150" r="8" />
+                    <line x1="30" y1="250" x2="570" y2="250" stroke="#bbb" stroke-width="1" stroke-dasharray="6 6" />
+                    <line class="line" id="mainLine" x1="30" y1="250" x2="570" y2="250" />
+                    <circle class="endpoint" id="leftDot" cx="30" cy="250" r="8" />
+                    <circle class="endpoint" id="rightDot" cx="570" cy="250" r="8" />
                 </svg>
             </div>
 
@@ -309,7 +309,7 @@
                     <rect x="8" y="46" width="4" height="6" fill="#1a1a1a"/>
                 </svg>
                 <div class="slider-wrapper">
-                    <input type="range" id="rightSlider" min="-50" max="50" value="0" step="1" />
+                    <input type="range" id="rightSlider" min="0" max="50" value="0" step="1" />
                     <span class="zero-marker">0</span>
                 </div>
                 <span class="slider-value" id="rightSliderValue">0 мм</span>
@@ -327,11 +327,11 @@
         </div>
 
         <div class="info">
-            <strong>Как это работает:</strong> Перемещайте ползунок, чтобы задать положение края (в мм, от −50 до +50).
+            <strong>Как это работает:</strong> Перемещайте ползунок, чтобы задать положение края (в мм, от 0 до 50).
             После отпускания ползунка платформа перемещается в указанную позицию.
             <br /><strong>Ось X</strong> — левая сторона, <strong>ось Y</strong> — правая сторона.
-            <br />Сервер автоматически корректирует движение, чтобы не выйти за границы (−50…+50 мм).
-            <br />Нулевое положение платформы находится по центру, а крайние положения — с отступом от краёв.
+            <br />Сервер автоматически корректирует движение, чтобы не выйти за границы (0…50 мм).
+            <br />Нулевое положение платформы находится внизу, максимальное (50 мм) — вверху.
         </div>
     </div>
 
@@ -340,9 +340,9 @@
         //  КОНФИГУРАЦИЯ
         // ============================================================
         const MAX_MM = 50;
-        const MIN_MM = -50;
+        const MIN_MM = 0;
         const PX_PER_CM = 24;
-        const BASE_Y = 150;
+        const BASE_Y = 250;          // нуль внизу (при 0 мм)
         const SVG_HEIGHT = 300;
         const SERVER_URL = window.location.origin;
 
@@ -373,7 +373,7 @@
         const homeBtn = document.getElementById('homeBtn');
 
         // ============================================================
-        //  ОТРИСОВКА (только визуал, без изменения состояния)
+        //  ОТРИСОВКА
         // ============================================================
         function render() {
             const leftCmVis = leftMm / 10;
@@ -389,8 +389,8 @@
             leftDot.setAttribute('cy', leftY);
             rightDot.setAttribute('cy', rightY);
 
-            leftSliderValue.textContent = leftMm + ' мм';
-            rightSliderValue.textContent = rightMm + ' мм';
+            leftSliderValue.textContent = Math.round(leftMm) + ' мм';
+            rightSliderValue.textContent = Math.round(rightMm) + ' мм';
 
             if (document.activeElement !== leftSlider) {
                 leftSlider.value = leftMm;
@@ -587,16 +587,19 @@
             } else {
                 rightSliderValue.textContent = val + ' мм';
             }
-            const leftCmVis = (axis === 'x' ? val : leftMm) / 10;
-            const rightCmVis = (axis === 'y' ? val : rightMm) / 10;
-            let leftY = BASE_Y - leftCmVis * PX_PER_CM;
-            let rightY = BASE_Y - rightCmVis * PX_PER_CM;
-            leftY = Math.min(SVG_HEIGHT, Math.max(0, leftY));
-            rightY = Math.min(SVG_HEIGHT, Math.max(0, rightY));
-            mainLine.setAttribute('y1', leftY);
-            mainLine.setAttribute('y2', rightY);
-            leftDot.setAttribute('cy', leftY);
-            rightDot.setAttribute('cy', rightY);
+
+            if (!isMoving) {
+                const leftCmVis = (axis === 'x' ? val : leftMm) / 10;
+                const rightCmVis = (axis === 'y' ? val : rightMm) / 10;
+                let leftY = BASE_Y - leftCmVis * PX_PER_CM;
+                let rightY = BASE_Y - rightCmVis * PX_PER_CM;
+                leftY = Math.min(SVG_HEIGHT, Math.max(0, leftY));
+                rightY = Math.min(SVG_HEIGHT, Math.max(0, rightY));
+                mainLine.setAttribute('y1', leftY);
+                mainLine.setAttribute('y2', rightY);
+                leftDot.setAttribute('cy', leftY);
+                rightDot.setAttribute('cy', rightY);
+            }
         }
 
         function onSliderChange(axis) {
@@ -641,7 +644,6 @@
         async function init() {
             const ok = await pingServer();
             if (ok) {
-                // При открытии страницы: сначала читаем дом (HR), затем возвращаемся домой (MH)
                 await doReadHome();
                 await doGoHome();
             } else {
