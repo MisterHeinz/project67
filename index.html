@@ -290,10 +290,10 @@
             <!-- Линия (SVG) -->
             <div class="line-area">
                 <svg class="line-svg" id="svg" viewBox="0 0 600 300" preserveAspectRatio="none">
-                    <line x1="30" y1="150" x2="570" y2="150" stroke="#bbb" stroke-width="1" stroke-dasharray="6 6" />
-                    <line class="line" id="mainLine" x1="30" y1="150" x2="570" y2="150" />
-                    <circle class="endpoint" id="leftDot" cx="30" cy="150" r="8" />
-                    <circle class="endpoint" id="rightDot" cx="570" cy="150" r="8" />
+                    <line x1="30" y1="250" x2="570" y2="250" stroke="#bbb" stroke-width="1" stroke-dasharray="6 6" />
+                    <line class="line" id="mainLine" x1="30" y1="250" x2="570" y2="250" />
+                    <circle class="endpoint" id="leftDot" cx="30" cy="250" r="8" />
+                    <circle class="endpoint" id="rightDot" cx="570" cy="250" r="8" />
                 </svg>
             </div>
 
@@ -342,7 +342,7 @@
         const MAX_MM = 50;
         const MIN_MM = 0;
         const PX_PER_CM = 24;
-        const BASE_Y = 150;
+        const BASE_Y = 250;          // нуль внизу (при 0 мм)
         const SVG_HEIGHT = 300;
         const SERVER_URL = window.location.origin;
 

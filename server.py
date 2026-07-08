@@ -91,7 +91,7 @@ def send_command(cmd):
         elif cmd.startswith('MH'):
             response = f"MHOK OX0.00000 OY0.00000"
         elif cmd.startswith('RM'):
-            ox_match = re.search(r'OX(-?[\d.]+)', cmd)  # оставляем поддержку отрицательных для эмуляции, но координаты будут >=0
+            ox_match = re.search(r'OX(-?[\d.]+)', cmd)
             oy_match = re.search(r'OY(-?[\d.]+)', cmd)
             if ox_match:
                 ox = float(ox_match.group(1))
@@ -258,8 +258,101 @@ def do_move_absolute(axis, target_mm):
 
 # ============================== ОБРАБОТКА HTTP ==============================
 class Handler(http.server.SimpleHTTPRequestHandler):
-    # ... без изменений ...
-    pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=DIRECTORY, **kwargs)
+
+    def log_message(self, format, *args):
+        print(f"[HTTP] {format % args}")
+
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path == '/ping':
+            print("[HTTP] GET /ping")
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok"}).encode('utf-8'))
+            return
+        super().do_GET()
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        print(f"[HTTP] POST {parsed.path}")
+
+        if parsed.path == '/calibrate':
+            result = do_calibrate()
+            status = 200 if result.get('success') else 400
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode('utf-8'))
+            return
+
+        elif parsed.path == '/read_home':
+            result = do_read_home()
+            status = 200 if result.get('success') else 400
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode('utf-8'))
+            return
+
+        elif parsed.path == '/go_home':
+            result = do_go_home()
+            status = 200 if result.get('success') else 400
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode('utf-8'))
+            return
+
+        elif parsed.path == '/move':
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            try:
+                data = json.loads(body)
+            except:
+                self.send_error(400, "Invalid JSON")
+                return
+            axis = data.get('axis')
+            amount = data.get('amount')
+            if axis not in ('x', 'y') or amount not in (1, -1):
+                self.send_error(400, "Invalid parameters")
+                return
+            amount_mm = amount * 10
+            current_display = display_x if axis == 'x' else display_y
+            target = current_display + amount_mm
+            result = do_move_absolute(axis, target)
+            status = 200 if result.get('success') else 400
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode('utf-8'))
+            return
+
+        elif parsed.path == '/move_abs':
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            try:
+                data = json.loads(body)
+            except:
+                self.send_error(400, "Invalid JSON")
+                return
+            axis = data.get('axis')
+            target_mm = data.get('target_mm')
+            if axis not in ('x', 'y') or target_mm is None:
+                self.send_error(400, "Invalid parameters")
+                return
+            result = do_move_absolute(axis, float(target_mm))
+            status = 200 if result.get('success') else 400
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode('utf-8'))
+            return
+
+        else:
+            self.send_error(404, "Not found")
 
 # ============================== ЗАПУСК ==============================
 def start_serial():
