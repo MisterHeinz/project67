@@ -23,15 +23,17 @@ TIMEOUT = 15
 SPEED = 66.7
 ACCEL = 20.0
 DECEL = 20.0
-MIN_STROKE_MM = 0       # только положительные значения
+MIN_STROKE_MM = 0
 MAX_STROKE_MM = 50
+CALIB_SPEED = 30.0
+CALIB_DOWN_MM = 60  # на сколько опускаться при калибровке
 
 # Глобальные переменные
 ser = None
 emulation = False
-current_x = 0.0      # реальное положение в системе координат контроллера
+current_x = 0.0
 current_y = 0.0
-display_x = 0.0      # отображаемое на сайте положение (в той же системе, но может иметь смещение)
+display_x = 0.0
 display_y = 0.0
 
 # Попытка импорта pyserial
@@ -88,6 +90,8 @@ def send_command(cmd):
                 ox = current_x
                 oy = current_y
             response = f"HWOK OX{ox:.5f} OY{oy:.5f}"
+        elif cmd.startswith('CA'):
+            response = "CAOK111"
         elif cmd.startswith('MH'):
             response = f"MHOK OX0.00000 OY0.00000"
         elif cmd.startswith('RM'):
@@ -193,17 +197,50 @@ def do_go_home():
     return {"success": True, "position": {"x": display_x, "y": display_y}}
 
 def do_calibrate():
-    """Калибровка: HW с текущими реальными координатами, затем обнуление отображения."""
+    """
+    Новая калибровка:
+    1. Отправить CA для калибровки датчиков.
+    2. Опустить платформу на 60 мм вниз.
+    3. Получить координаты из ответа RM.
+    4. Записать домашнее положение (HW) с этими координатами.
+    5. Обновить current_x, current_y из ответа RM, display обнулить.
+    """
     global current_x, current_y, display_x, display_y
-    print(f"[SYS] Калибровка: HW OX{current_x:.1f} OY{current_y:.1f}...")
-    cmd = f"HW OX{current_x:.1f} OY{current_y:.1f}"
-    ok, response = send_command(cmd)
-    if not ok:
-        return {"success": False, "error": "Ошибка отправки HW"}
+    print("[SYS] Запуск калибровки (CA)...")
 
+    # 1. Отправка CA
+    cmd_ca = f"CASP{CALIB_SPEED:.1f}"
+    ok, response = send_command(cmd_ca)
+    if not ok:
+        return {"success": False, "error": "Ошибка отправки CA"}
+    if not response.startswith("CAOK"):
+        return {"success": False, "error": f"Неверный ответ CA: {response}"}
+    print(f"[SYS] CA успешно: {response}")
+
+    # 2. Опускаемся на 60 мм вниз (по обеим осям)
+    cmd_down = f"RMOX0.0OY-{CALIB_DOWN_MM:.1f}OZ0.0OA0.0SP{SPEED:.1f}AC{ACCEL:.1f}DC{DECEL:.1f}"
+    ok, response = send_command(cmd_down)
+    if not ok:
+        return {"success": False, "error": "Ошибка опускания при калибровке"}
+
+    # 3. Парсим координаты из ответа RM
+    x, y = parse_coordinates(response)
+    if x is None or y is None:
+        return {"success": False, "error": "Не удалось распарсить координаты после опускания"}
+    print(f"[SYS] После опускания координаты: X={x:.2f}, Y={y:.2f}")
+
+    # 4. Записываем домашнее положение в текущей точке (эти координаты)
+    cmd_hw = f"HW OX{x:.1f} OY{y:.1f}"
+    ok, response = send_command(cmd_hw)
+    if not ok:
+        return {"success": False, "error": "Ошибка отправки HW при калибровке"}
+
+    # 5. Обновляем координаты сервера
+    current_x = x
+    current_y = y
     display_x = 0.0
     display_y = 0.0
-    print("[SYS] Калибровка выполнена. Отображение сброшено в 0.")
+    print(f"[SYS] Калибровка завершена. Реальные координаты: X={current_x:.2f}, Y={current_y:.2f}. Отображение: 0,0")
     return {"success": True, "position": {"x": display_x, "y": display_y}}
 
 def do_move_absolute(axis, target_mm):

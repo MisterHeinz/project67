@@ -42,7 +42,7 @@
             grid-template-columns: 140px 1fr 140px;
             align-items: stretch;
             gap: 70px;
-            min-height: 320px;
+            min-height: 500px;
         }
 
         .controls {
@@ -70,14 +70,43 @@
             transform: scaleX(-1);
         }
 
+        .slider-container {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            width: 100%;
+            height: 300px;
+            position: relative;
+            overflow: visible;
+        }
+
+        .slider-container .step-btn-container {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 1;
+        }
+
+        .slider-container.left .step-btn-container {
+            margin-right: 8px;
+        }
+
+        .slider-container.right .step-btn-container {
+            margin-left: auto;
+            margin-right: 8px;
+        }
+
         .slider-wrapper {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 190px;
-            width: 100%;
-            position: relative;
+            height: 300px;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            flex-shrink: 0;
         }
 
         .zero-marker {
@@ -99,7 +128,7 @@
             -webkit-appearance: none;
             appearance: none;
             transform: rotate(270deg);
-            width: 150px;
+            width: 250px; /* увеличено с 150px до 250px */
             height: 8px;
             background: #ccc;
             border-radius: 4px;
@@ -112,9 +141,9 @@
         input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
+            width: 28px;
+            height: 16px;
+            border-radius: 2px;
             background: #2c3e50;
             cursor: pointer;
             border: 2px solid white;
@@ -122,13 +151,52 @@
         }
 
         input[type="range"]::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
+            width: 28px;
+            height: 16px;
+            border-radius: 2px;
             background: #2c3e50;
             cursor: pointer;
             border: 2px solid white;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .step-btn {
+            width: 32px;
+            height: 32px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            user-select: none;
+            color: #2c3e50;
+            flex-shrink: 0;
+        }
+
+        .step-btn:hover:not(:disabled) {
+            background: #e9ecef;
+            transform: scale(1.05);
+        }
+
+        .step-btn:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+
+        .step-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .step-btn.up {
+            margin-bottom: 4px;
+        }
+
+        .step-btn.down {
+            margin-top: 4px;
         }
 
         .slider-value {
@@ -147,7 +215,7 @@
 
         .line-area {
             position: relative;
-            height: 320px;
+            height: 500px;
             background: #f0f2f5;
             border-radius: 12px;
             overflow: hidden;
@@ -167,24 +235,9 @@
         }
 
         .endpoint {
-            fill: #e74c3c;
-            stroke: #c0392b;
+            fill: #888888;
+            stroke: #666666;
             stroke-width: 2;
-        }
-
-        .info {
-            margin-top: 30px;
-            padding: 18px 22px;
-            background: #f8f9fa;
-            border-left: 4px solid #667eea;
-            border-radius: 8px;
-            font-size: 15px;
-            color: #555;
-            line-height: 1.7;
-        }
-
-        .info strong {
-            color: #333;
         }
 
         .status-bar {
@@ -280,16 +333,24 @@
                     <rect x="8" y="8" width="4" height="6" fill="#1a1a1a"/>
                     <rect x="8" y="46" width="4" height="6" fill="#1a1a1a"/>
                 </svg>
-                <div class="slider-wrapper">
-                    <input type="range" id="leftSlider" min="0" max="50" value="0" step="1" />
-                    <span class="zero-marker">0</span>
+
+                <div class="slider-container left">
+                    <div class="step-btn-container">
+                        <button class="step-btn up" id="leftUp" title="Вверх на 1 мм">▲</button>
+                        <button class="step-btn down" id="leftDown" title="Вниз на 1 мм">▼</button>
+                    </div>
+                    <div class="slider-wrapper">
+                        <input type="range" id="leftSlider" min="0" max="50" value="0" step="1" />
+                        <span class="zero-marker">0</span>
+                    </div>
                 </div>
+
                 <span class="slider-value" id="leftSliderValue">0 мм</span>
             </div>
 
             <!-- Линия (SVG) -->
             <div class="line-area">
-                <svg class="line-svg" id="svg" viewBox="0 0 600 300" preserveAspectRatio="none">
+                <svg class="line-svg" id="svg" viewBox="0 0 600 300" preserveAspectRatio="xMidYMid meet">
                     <line x1="30" y1="250" x2="570" y2="250" stroke="#bbb" stroke-width="1" stroke-dasharray="6 6" />
                     <line class="line" id="mainLine" x1="30" y1="250" x2="570" y2="250" />
                     <circle class="endpoint" id="leftDot" cx="30" cy="250" r="8" />
@@ -308,10 +369,18 @@
                     <rect x="8" y="8" width="4" height="6" fill="#1a1a1a"/>
                     <rect x="8" y="46" width="4" height="6" fill="#1a1a1a"/>
                 </svg>
-                <div class="slider-wrapper">
-                    <input type="range" id="rightSlider" min="0" max="50" value="0" step="1" />
-                    <span class="zero-marker">0</span>
+
+                <div class="slider-container right">
+                    <div class="slider-wrapper">
+                        <input type="range" id="rightSlider" min="0" max="50" value="0" step="1" />
+                        <span class="zero-marker">0</span>
+                    </div>
+                    <div class="step-btn-container">
+                        <button class="step-btn up" id="rightUp" title="Вверх на 1 мм">▲</button>
+                        <button class="step-btn down" id="rightDown" title="Вниз на 1 мм">▼</button>
+                    </div>
                 </div>
+
                 <span class="slider-value" id="rightSliderValue">0 мм</span>
             </div>
         </div>
@@ -325,14 +394,6 @@
             <button class="calib-btn" id="calibrateBtn">⟳ Калибровка</button>
             <button class="calib-btn home" id="homeBtn">В ноль (0)</button>
         </div>
-
-        <div class="info">
-            <strong>Как это работает:</strong> Перемещайте ползунок, чтобы задать положение края (в мм, от 0 до 50).
-            После отпускания ползунка платформа перемещается в указанную позицию.
-            <br /><strong>Ось X</strong> — левая сторона, <strong>ось Y</strong> — правая сторона.
-            <br />Сервер автоматически корректирует движение, чтобы не выйти за границы (0…50 мм).
-            <br />Нулевое положение платформы находится внизу, максимальное (50 мм) — вверху.
-        </div>
     </div>
 
     <script>
@@ -342,7 +403,7 @@
         const MAX_MM = 50;
         const MIN_MM = 0;
         const PX_PER_CM = 24;
-        const BASE_Y = 250;          // нуль внизу (при 0 мм)
+        const BASE_Y = 250;
         const SVG_HEIGHT = 300;
         const SERVER_URL = window.location.origin;
 
@@ -364,6 +425,11 @@
         const rightSlider = document.getElementById('rightSlider');
         const leftSliderValue = document.getElementById('leftSliderValue');
         const rightSliderValue = document.getElementById('rightSliderValue');
+
+        const leftUp = document.getElementById('leftUp');
+        const leftDown = document.getElementById('leftDown');
+        const rightUp = document.getElementById('rightUp');
+        const rightDown = document.getElementById('rightDown');
 
         const statusDot = document.getElementById('statusDot');
         const statusLabel = document.getElementById('statusLabel');
@@ -398,6 +464,11 @@
             if (document.activeElement !== rightSlider) {
                 rightSlider.value = rightMm;
             }
+
+            leftUp.disabled = leftMm >= MAX_MM || isMoving;
+            leftDown.disabled = leftMm <= MIN_MM || isMoving;
+            rightUp.disabled = rightMm >= MAX_MM || isMoving;
+            rightDown.disabled = rightMm <= MIN_MM || isMoving;
         }
 
         // ============================================================
@@ -575,6 +646,26 @@
             isMoving = false;
             render();
         }
+
+        // ============================================================
+        //  ОБРАБОТЧИКИ ШАГОВЫХ КНОПОК
+        // ============================================================
+        function stepUp(axis) {
+            const current = axis === 'x' ? leftMm : rightMm;
+            if (current >= MAX_MM) return;
+            doMoveAbsolute(axis, current + 1);
+        }
+
+        function stepDown(axis) {
+            const current = axis === 'x' ? leftMm : rightMm;
+            if (current <= MIN_MM) return;
+            doMoveAbsolute(axis, current - 1);
+        }
+
+        leftUp.addEventListener('click', () => stepUp('x'));
+        leftDown.addEventListener('click', () => stepDown('x'));
+        rightUp.addEventListener('click', () => stepUp('y'));
+        rightDown.addEventListener('click', () => stepDown('y'));
 
         // ============================================================
         //  ОБРАБОТЧИКИ ПОЛЗУНКОВ
