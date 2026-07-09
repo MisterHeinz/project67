@@ -10,22 +10,24 @@ import os
 import time
 import re
 from urllib.parse import urlparse
+import serial
+SERIAL_AVAILABLE = True
 
 PORT = 8000
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
 # Порт микроконтроллера и время ожидания
-SERIAL_PORT = 'COM6'  # /dev/ttyACM0
+SERIAL_PORT = '/dev/ttyACM0'
 BAUDRATE = 115200
-TIMEOUT = 15
+TIMEOUT = 60
 
 # Константы движения
 SPEED = 66.7
 ACCEL = 20.0
 DECEL = 20.0
 MIN_STROKE_MM = 0
-MAX_STROKE_MM = 50
-CALIB_SPEED = 30.0
+MAX_STROKE_MM = 100
+CALIB_SPEED = 100.0
 CALIB_DOWN_MM = 60  # на сколько опускаться при калибровке
 
 # Глобальные переменные
@@ -36,32 +38,17 @@ current_y = 0.0
 display_x = 0.0
 display_y = 0.0
 
-# Попытка импорта pyserial
-try:
-    import serial
-    SERIAL_AVAILABLE = True
-except ImportError:
-    SERIAL_AVAILABLE = False
-    print("ERROR: pyserial не установлен. Установите: pip install pyserial")
-    print("Сервер будет работать в режиме ЭМУЛЯЦИИ.")
-
 # ============================== РАБОТА С ПОРТОМ ==============================
 def open_serial():
     global ser, emulation
-    if not SERIAL_AVAILABLE:
-        emulation = True
-        return
+
     try:
         ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=TIMEOUT)
         ser.reset_input_buffer()
         ser.reset_output_buffer()
         print(f" Порт {SERIAL_PORT} открыт на скорости {BAUDRATE} бод")
-        emulation = False
     except Exception as e:
         print(f"ERROR: Не удалось открыть порт {SERIAL_PORT}: {e}")
-        print("Сервер переходит в режим ЭМУЛЯЦИИ.")
-        emulation = True
-        ser = None
 
 def close_serial():
     global ser
@@ -74,44 +61,6 @@ def send_command(cmd):
     """
     Отправляет команду и читает ответ, возвращает (success, response).
     """
-    if emulation or ser is None:
-        print(f"[EMU] -> {cmd}")
-        time.sleep(0.05)
-        # Эмулируем ответ в зависимости от команды
-        if cmd.startswith('HR'):
-            response = f"HROK OX{current_x:.5f} OY{current_y:.5f}"
-        elif cmd.startswith('HW'):
-            ox_match = re.search(r'OX([\d.]+)', cmd)
-            oy_match = re.search(r'OY([\d.]+)', cmd)
-            if ox_match and oy_match:
-                ox = float(ox_match.group(1))
-                oy = float(oy_match.group(1))
-            else:
-                ox = current_x
-                oy = current_y
-            response = f"HWOK OX{ox:.5f} OY{oy:.5f}"
-        elif cmd.startswith('CA'):
-            response = "CAOK111"
-        elif cmd.startswith('MH'):
-            response = f"MHOK OX0.00000 OY0.00000"
-        elif cmd.startswith('RM'):
-            ox_match = re.search(r'OX(-?[\d.]+)', cmd)
-            oy_match = re.search(r'OY(-?[\d.]+)', cmd)
-            if ox_match:
-                ox = float(ox_match.group(1))
-                current_x += ox
-            if oy_match:
-                oy = float(oy_match.group(1))
-                current_y += oy
-            # Принудительно ограничиваем диапазон 0..MAX_STROKE_MM
-            current_x = max(MIN_STROKE_MM, min(MAX_STROKE_MM, current_x))
-            current_y = max(MIN_STROKE_MM, min(MAX_STROKE_MM, current_y))
-            response = f"RMRESULT_SUCCESSOX{current_x:.5f}OY{current_y:.5f}OZ0.00000OA0.00000"
-        else:
-            response = "OK"
-        print(f"[EMU] <- {response}")
-        return True, response
-
     try:
         ser.reset_input_buffer()
         ser.write((cmd + '\n').encode('utf-8'))
@@ -267,9 +216,6 @@ def do_move_absolute(axis, target_mm):
             return {"success": False, "error": f"Выход за границы ({MIN_STROKE_MM}..{MAX_STROKE_MM} мм)"}
         ox = 0.0
         oy = delta_display
-
-    if abs(delta_display) < 0.01:
-        return {"success": True, "position": {"x": display_x, "y": display_y}, "note": "already at position"}
 
     cmd = f"RMOX{ox:.1f}OY{oy:.1f}OZ0.0OA0.0SP{SPEED:.1f}AC{ACCEL:.1f}DC{DECEL:.1f}"
     ok, response = send_command(cmd)
