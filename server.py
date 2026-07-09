@@ -166,30 +166,32 @@ def do_calibrate():
         return {"success": False, "error": f"Неверный ответ CA: {response}"}
     print(f"[SYS] CA успешно: {response}")
 
+    """
     # 2. Опускаемся на 60 мм вниз (по обеим осям)
     cmd_down = f"RMOX0.0OY-{CALIB_DOWN_MM:.1f}OZ0.0OA0.0SP{SPEED:.1f}AC{ACCEL:.1f}DC{DECEL:.1f}"
     ok, response = send_command(cmd_down)
     if not ok:
         return {"success": False, "error": "Ошибка опускания при калибровке"}
-
+    
     # 3. Парсим координаты из ответа RM
     x, y = parse_coordinates(response)
     if x is None or y is None:
         return {"success": False, "error": "Не удалось распарсить координаты после опускания"}
     print(f"[SYS] После опускания координаты: X={x:.2f}, Y={y:.2f}")
+    """
 
     # 4. Записываем домашнее положение в текущей точке (эти координаты)
-    cmd_hw = f"HW OX{x:.1f} OY{y:.1f}"
+    cmd_hw = f"HW OX{0.0} OY{0.0}"
     ok, response = send_command(cmd_hw)
     if not ok:
         return {"success": False, "error": "Ошибка отправки HW при калибровке"}
 
     # 5. Обновляем координаты сервера
-    current_x = x
-    current_y = y
+    current_x = 0
+    current_y = 0
     display_x = 0.0
     display_y = 0.0
-    print(f"[SYS] Калибровка завершена. Реальные координаты: X={current_x:.2f}, Y={current_y:.2f}. Отображение: 0,0")
+    print(f"[SYS] Калибровка завершена. Текущие координаты: X={current_x:.2f}, Y={current_y:.2f}.")
     return {"success": True, "position": {"x": display_x, "y": display_y}}
 
 def do_move_absolute(axis, target_mm):
