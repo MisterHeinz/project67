@@ -192,12 +192,12 @@ void setup()
 		pinMode(PIN_MAGAZINE[i], INPUT);
 	}
 
-	X.setStepsPerRevolution(10000)
+	X.setStepsPerRevolution(1000)
 		.setUnitsPerRevolution(8.0F)   // можно уточнить до 6.676, если хотите
   	.setInverseDirPin(false)
   	.enableLimits(-100000.0F, 100000.0F);
 
-	Y.setStepsPerRevolution(10000)
+	Y.setStepsPerRevolution(1000)
 		.setUnitsPerRevolution(7.8F)   // можно уточнить до 6.676, если хотите
   	.setInverseDirPin(true)
   	.enableLimits(-100000.0F, 100000.0F);
