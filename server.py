@@ -25,10 +25,10 @@ TIMEOUT = 60
 SPEED = 66.7
 ACCEL = 20.0
 DECEL = 20.0
-MIN_STROKE_MM = 0
+MIN_STROKE_MM = -100      
 MAX_STROKE_MM = 100
 CALIB_SPEED = 100.0
-CALIB_DOWN_MM = 60  # на сколько опускаться при калибровке
+CALIB_DOWN_MM = 60
 
 # Глобальные переменные
 ser = None
@@ -69,7 +69,7 @@ def send_command(cmd):
 
         start_time = time.time()
         response = ""
-        while time.time() - start_time < 15.0:
+        while time.time() - start_time < TIMEOUT:
             if ser.in_waiting > 0:
                 char = ser.read(1).decode('utf-8', errors='ignore')
                 response += char
@@ -197,8 +197,8 @@ def do_move_absolute(axis, target_mm):
     global current_x, current_y, display_x, display_y
     print(f"[SYS] do_move_absolute: axis={axis}, target_mm={target_mm} (display)")
 
-    if target_mm < MIN_STROKE_MM or target_mm > MAX_STROKE_MM:
-        return {"success": False, "error": f"Цель вне границ ({MIN_STROKE_MM}..{MAX_STROKE_MM} мм)"}
+    if target_mm < 0 or target_mm > 100:
+        return {"success": False, "error": f"Цель вне границ (0..100 мм)"}
 
     if axis == 'x':
         delta_display = target_mm - display_x
