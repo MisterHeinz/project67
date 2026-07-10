@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-"""
-ДЛЯ СЕРЕГИ - РЕЖИМ ЭМУЛЯЦИИ НУЖЕН ДЛЯ ПРОВЕРКИ РАБОТЫ БЕЗ ПОДКЛЮЧЕНИЯ КОНТРОЛЛЕРА
-"""
 
 import http.server
 import socketserver
@@ -355,7 +352,6 @@ def main():
     with socketserver.TCPServer(("", PORT), Handler) as httpd:
         print("=" * 50)
         print(f" Сервер запущен на http://localhost:{PORT}")
-        print("  (Эмуляция — реальное оборудование не задействовано)")
         print("  Для остановки нажмите Ctrl+C")
         print("=" * 50)
         try:

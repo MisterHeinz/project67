@@ -735,8 +735,7 @@
         async function init() {
             const ok = await pingServer();
             if (ok) {
-                await doReadHome();
-                await doGoHome();
+                await doCalibrate();
             } else {
                 setTimeout(init, 5000);
             }
